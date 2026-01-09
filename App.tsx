@@ -17,7 +17,7 @@ const App: React.FC = () => {
               <Mic2 className="text-white" size={24} />
             </div>
             <div>
-              <h1 className="font-bold text-lg tracking-tight">Tarannumm</h1>
+              <h1 className="font-bold text-lg tracking-tight">Tarannum</h1>
               <p className="text-xs text-slate-400">AI Trainer System</p>
             </div>
           </div>
