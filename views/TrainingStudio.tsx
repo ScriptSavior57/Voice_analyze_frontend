@@ -530,13 +530,13 @@ const TrainingStudio: React.FC = () => {
           // State is already set to true at the beginning of useEffect, but we ensure it here too
           setIsExtractingRefPitch(true);
           console.log("⏳ Calling extractReferencePitch - backend will start extraction, isExtractingRefPitch is true");
-          
+
           pitchData = await extractReferencePitch(
             undefined, // No blob needed
             undefined, // No filename needed
             selectedRef.id // Use reference_id
           );
-          
+
           console.log("✅ extractReferencePitch completed - received", pitchData.reference?.length || 0, "pitch points");
         } else {
           // Fallback: fetch blob and extract (for custom uploads)
@@ -1768,7 +1768,7 @@ const TrainingStudio: React.FC = () => {
 
       // IMPORTANT: Clear old graph and set extraction state BEFORE setting new selectedRef
       // This ensures "extracting..." shows immediately instead of previous graph
-      // Set extraction state first to immediately show "Extracting Pitch Data..."
+      // Set extraction state first to immediately show "Extracting reference pitch..."
       setIsExtractingRefPitch(true);
       setReferencePitchData([]);
       pitchDataRefIdRef.current = undefined; // Clear ref ID so old graph is immediately hidden
@@ -1945,11 +1945,11 @@ const TrainingStudio: React.FC = () => {
                   1. isExtractingRefPitch is true, OR
                   2. The current pitch data doesn't belong to the current selectedRef (old data from previous file)
               */}
-              {isExtractingRefPitch || 
-               (pitchDataRefIdRef.current !== undefined && 
+              {isExtractingRefPitch ||
+               (pitchDataRefIdRef.current !== undefined &&
                 pitchDataRefIdRef.current !== selectedRef?.id) ? (
                 <div className='text-center py-12 text-slate-500'>
-                  <p className='text-lg font-medium mb-2'>Extracting Pitch Data...</p>
+                  <p className='text-lg font-medium mb-2'>Extracting reference pitch...</p>
                   {selectedRef?.title && (
                     <p className='text-sm text-slate-400'>{selectedRef.title}</p>
                   )}
@@ -2511,8 +2511,8 @@ const TrainingStudio: React.FC = () => {
             {/* MOVED BEFORE the recording section so it shows during AND after recording */}
             {(() => {
               // Don't show graph if extracting (old graph from previous file)
-              if (isExtractingRefPitch || 
-                  (pitchDataRefIdRef.current !== undefined && 
+              if (isExtractingRefPitch ||
+                  (pitchDataRefIdRef.current !== undefined &&
                    pitchDataRefIdRef.current !== selectedRef?.id)) {
                 return (
                   <div className='mb-4'>
@@ -2534,7 +2534,7 @@ const TrainingStudio: React.FC = () => {
                   </div>
                 );
               }
-              
+
               const hasRefPitch =
                 referencePitchData.length > 0 ||
                 (analysisResult?.pitchData?.reference &&
