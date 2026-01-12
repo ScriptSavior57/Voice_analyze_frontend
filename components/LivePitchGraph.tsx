@@ -14,6 +14,9 @@ interface LivePitchGraphProps {
   isFullScreen?: boolean; // Full-screen training mode (hides controls, simplifies UI)
   markers?: PitchMarker[]; // Training markers for unclear/unstable segments
   onMarkerClick?: (time: number) => void; // Callback when marker is clicked
+  fixedYAxis?: boolean; // Lock Y-axis to fixed range (60-1200 Hz) when true
+  minFreq?: number; // Minimum frequency for fixed Y-axis (default: 60 Hz)
+  maxFreq?: number; // Maximum frequency for fixed Y-axis (default: 1200 Hz)
 }
 
 const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
@@ -27,6 +30,9 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
   isFullScreen = false,
   markers = [],
   onMarkerClick,
+  fixedYAxis = false,
+  minFreq = 60,
+  maxFreq = 1200,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -782,9 +788,13 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
         .filter((f): f is number => f !== null && f !== undefined);
 
       const allFreqs = [...refFreqs, ...studentFreqs];
-      const minFreq = allFreqs.length > 0 ? Math.min(...allFreqs) : 60;
-      const maxFreq = allFreqs.length > 0 ? Math.max(...allFreqs) : 1200;
-      const freqRange = maxFreq - minFreq || 1140;
+      // Use fixed Y-axis range in full-screen mode, otherwise auto-scale
+      const useFixedRange = isFullScreen || fixedYAxis;
+      const calculatedMinFreq = allFreqs.length > 0 ? Math.min(...allFreqs) : 60;
+      const calculatedMaxFreq = allFreqs.length > 0 ? Math.max(...allFreqs) : 1200;
+      const finalMinFreq = useFixedRange ? minFreq : calculatedMinFreq;
+      const finalMaxFreq = useFixedRange ? maxFreq : calculatedMaxFreq;
+      const freqRange = finalMaxFreq - finalMinFreq || 1140;
 
       // Draw grid
       ctx.strokeStyle = "#e2e8f0";
@@ -880,7 +890,7 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
           const y =
             displayHeight -
             padding -
-            ((point.f_hz - minFreq) / freqRange) * graphHeight;
+            ((point.f_hz - finalMinFreq) / freqRange) * graphHeight;
 
           if (firstPoint) {
             ctx.moveTo(x, y);
@@ -998,7 +1008,7 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
           const y =
             displayHeight -
             padding -
-            ((point.frequency - minFreq) / freqRange) * graphHeight;
+            ((point.frequency - finalMinFreq) / freqRange) * graphHeight;
 
           if (firstPoint) {
             ctx.moveTo(x, y);
@@ -1038,7 +1048,7 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
           const y =
             displayHeight -
             padding -
-            ((point.frequency - minFreq) / freqRange) * graphHeight;
+            ((point.frequency - finalMinFreq) / freqRange) * graphHeight;
 
           ctx.fillStyle = "#ef4444";
           ctx.beginPath();
@@ -1114,7 +1124,7 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
             y =
               displayHeight -
               padding -
-              ((markerPitchPoint.frequency - minFreq) / freqRange) *
+              ((markerPitchPoint.frequency - finalMinFreq) / freqRange) *
                 graphHeight;
           } else {
             // Place marker in middle of graph if no pitch data

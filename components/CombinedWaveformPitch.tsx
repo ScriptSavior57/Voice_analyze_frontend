@@ -82,9 +82,10 @@ const CombinedWaveformPitch: React.FC<CombinedWaveformPitchProps> = ({
     <div className={`${containerClass} mb-4`} style={{ position: 'relative' }}>
       {/* Pitch Contour Section */}
       <div
-        className='w-full border-b border-slate-200 overflow-hidden relative'
+        className='w-full overflow-hidden relative'
         style={{
           zIndex: 1,
+          height: isFullScreen ? `${height}px` : undefined,
         }}
       >
         <LivePitchGraph
@@ -94,14 +95,18 @@ const CombinedWaveformPitch: React.FC<CombinedWaveformPitchProps> = ({
           isPlaying={isPlaying}
           currentTime={currentTime}
           referenceDuration={referenceDuration}
-          height={pitchHeight}
+          height={isFullScreen ? height : pitchHeight}
           isFullScreen={isFullScreen}
           markers={markers}
           onMarkerClick={onMarkerClick}
+          fixedYAxis={isFullScreen}
+          minFreq={60}
+          maxFreq={1200}
         />
       </div>
 
-      {/* Waveform Section (40% height) */}
+      {/* Waveform Section (40% height) - Hidden in full-screen mode */}
+      {!isFullScreen && (
       <div
         className='w-full overflow-hidden relative'
         style={{
@@ -207,6 +212,7 @@ const CombinedWaveformPitch: React.FC<CombinedWaveformPitchProps> = ({
           )}
         </div>
       </div>
+      )}
     </div>
   );
 };

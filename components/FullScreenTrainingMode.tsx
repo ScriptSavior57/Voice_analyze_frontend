@@ -17,6 +17,8 @@ import LivePitchGraph from "./LivePitchGraph";
 import CombinedWaveformPitch from "./CombinedWaveformPitch";
 import LiveHzDisplay from "./LiveHzDisplay";
 import AyahTextDisplay from "./AyahTextDisplay";
+import FullScreenAyahTextDisplay from "./FullScreenAyahTextDisplay";
+import Countdown from "./Countdown";
 
 interface FullScreenTrainingModeProps {
   isOpen: boolean;
@@ -130,6 +132,7 @@ const FullScreenTrainingMode: React.FC<FullScreenTrainingModeProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [showPracticeStats, setShowPracticeStats] = useState(false);
+  const [showCountdown, setShowCountdown] = useState(false);
 
   // Format time display
   const formatTime = (seconds: number): string => {
@@ -143,14 +146,15 @@ const FullScreenTrainingMode: React.FC<FullScreenTrainingModeProps> = ({
   const progressPercent =
     referenceDuration > 0 ? (currentTime / referenceDuration) * 100 : 0;
 
-  // Calculate graph height for full-screen (optimized to fit exactly)
+  // Calculate graph height for full-screen (maximized to use most of screen)
   const getGraphHeight = () => {
     if (typeof window !== "undefined") {
-      // Calculate available height: viewport - LiveHzDisplay - controls bar - padding
-      const availableHeight = window.innerHeight - 200; // Approximate space for other elements
-      return Math.max(300, Math.floor(availableHeight * 0.7));
+      // Calculate available height: viewport - LiveHzDisplay - Quranic text - controls bar - padding
+      // Maximize graph to use ~75% of viewport height
+      const availableHeight = window.innerHeight - 280; // Space for LiveHzDisplay (~80px), Quranic text (~150px), controls (~50px)
+      return Math.max(400, Math.floor(availableHeight * 0.75));
     }
-    return 500;
+    return 600;
   };
 
   const [graphHeight, setGraphHeight] = React.useState(getGraphHeight());
@@ -472,20 +476,19 @@ const FullScreenTrainingMode: React.FC<FullScreenTrainingModeProps> = ({
           />
         </div>
 
-        {/* Quranic Text Display - Below Graph */}
+        {/* Enhanced Quranic Text Display - Below Graph (Full-Screen Optimized) */}
         {ayatTiming && ayatTiming.length > 0 && referenceDuration > 0 && (
-          <div className='w-full px-4'>
-            <AyahTextDisplay
-              ayatTiming={ayatTiming}
-              currentTime={currentTime}
-              duration={referenceDuration}
-              onSeek={(time) => {
-                if (onSeekToTime) {
-                  onSeekToTime(time);
-                }
-              }}
-            />
-          </div>
+          <FullScreenAyahTextDisplay
+            ayatTiming={ayatTiming}
+            currentTime={currentTime}
+            duration={referenceDuration}
+            onSeek={(time) => {
+              if (onSeekToTime) {
+                onSeekToTime(time);
+              }
+            }}
+            theme={currentTheme}
+          />
         )}
       </div>
 
@@ -503,7 +506,8 @@ const FullScreenTrainingMode: React.FC<FullScreenTrainingModeProps> = ({
                   if (isPracticeMode) {
                     onPracticeStop();
                   } else {
-                    onPracticeStart();
+                    // Show countdown before starting practice
+                    setShowCountdown(true);
                   }
                 }}
                 className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all ${
@@ -737,6 +741,22 @@ const FullScreenTrainingMode: React.FC<FullScreenTrainingModeProps> = ({
           </span>
         </div>
       </div>
+
+      {/* Countdown Overlay - Shows before practice mode starts */}
+      <Countdown
+        isActive={showCountdown}
+        onComplete={() => {
+          setShowCountdown(false);
+          if (onPracticeStart) {
+            onPracticeStart();
+          }
+        }}
+        onCancel={() => {
+          setShowCountdown(false);
+        }}
+        duration={5}
+        showAudioCue={true}
+      />
     </div>
   );
 };
