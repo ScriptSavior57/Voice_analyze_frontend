@@ -586,7 +586,10 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
       }
 
       // Clear canvas using actual canvas dimensions
+      // Use save/restore to avoid flickering
+      ctx.save();
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
 
       // Get time range - use actual audio duration if provided, otherwise use max pitch time
       const refMaxTime =
@@ -864,7 +867,7 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
         );
 
         ctx.strokeStyle = "#10b981"; // Green
-        ctx.lineWidth = 2.5;
+        ctx.lineWidth = 2; // Slightly thinner so red line overwrites it more clearly
         ctx.beginPath();
         let firstPoint = true;
         let lastValidPoint: { x: number; y: number } | null = null;
@@ -951,7 +954,7 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
         });
 
         ctx.strokeStyle = "#ef4444"; // Red
-        ctx.lineWidth = 2.5;
+        ctx.lineWidth = 3.5; // Thicker than reference (2.5) to ensure it overwrites/overlays the green line
         ctx.beginPath();
         let firstPoint = true;
         let lastValidPoint: { x: number; y: number } | null = null;
@@ -1212,13 +1215,14 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
     // Start animation loop if needed
     // Keep animation running if we have pitch data, even if not recording/playing
     // This ensures graphs remain visible after practice/recording/playback ends
+    // IMPORTANT: Always run animation during recording, even if studentPitch is empty initially
     if (
-      isRecording ||
+      isRecording || // Always animate during recording (data will come in)
       isPlaying ||
       studentPitch.length > 0 || // Start/continue if student pitch exists (even after practice stops)
       referencePitch.length > 0 // Start/continue if reference pitch exists (even after playback stops)
     ) {
-      animationFrameRef.current = requestAnimationFrame(animate);
+      animationFrameRef.current = requestAnimationFrame((time) => animate(time));
     } else {
       // Even if not animating, ensure we draw at least once after canvas is ready
       const delayedDraw = () => {
@@ -1249,9 +1253,8 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
     referenceDuration,
     isFullScreen, // Add isFullScreen to trigger redraw when entering fullscreen
     markers, // Include markers to trigger redraw when they change
-    // Explicitly include studentPitch.length to ensure effect re-runs when data becomes available
-    studentPitch.length,
-    referencePitch.length,
+    // Don't include .length - it changes too frequently and causes blinking
+    // The array reference changes are enough to trigger updates
   ]);
 
   // Force redraw when playback state changes (especially when reference audio starts)

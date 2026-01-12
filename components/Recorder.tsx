@@ -6,7 +6,7 @@ import { PitchData } from "../types";
 interface RecorderProps {
   onRecordingComplete: (blob: Blob) => void;
   onPitchUpdate?: (pitch: PitchPoint) => void; // Real-time pitch callback
-  onRecordingStart?: () => void; // Reset callback
+  onRecordingStart?: () => void; // Countdown trigger callback (doesn't start recording immediately)
   isRecording: boolean;
   setIsRecording: (val: boolean) => void;
   // Props for pitch graph view
@@ -14,6 +14,8 @@ interface RecorderProps {
   referencePitchData?: PitchData[]; // Reference pitch for comparison
   referenceDuration?: number; // Reference audio duration
   viewMode?: "waveform" | "pitch"; // Display mode
+  // New prop to trigger actual recording start (after countdown)
+  triggerRecordingStart?: boolean; // When true, starts recording immediately
 }
 
 const Recorder: React.FC<RecorderProps> = ({
@@ -26,20 +28,17 @@ const Recorder: React.FC<RecorderProps> = ({
   referencePitchData = [],
   referenceDuration = 0,
   viewMode = "pitch", // Default to pitch view
+  triggerRecordingStart = false, // Trigger to start recording after countdown
 }) => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const pitchExtractorRef = useRef<RealTimePitchExtractor | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [timer, setTimer] = useState(0);
   const timerIntervalRef = useRef<number | null>(null);
+  const hasStartedRef = useRef<boolean>(false); // Track if recording has been started
 
   const startRecording = async () => {
     try {
-      // Reset callback (clears state for recording)
-      if (onRecordingStart) {
-        onRecordingStart();
-      }
-
       // Get microphone stream for recording with balanced settings
       // Enabled noiseSuppression and autoGainControl for clear, audible recordings
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -74,13 +73,14 @@ const Recorder: React.FC<RecorderProps> = ({
       if (onPitchUpdate) {
         const extractor = new RealTimePitchExtractor();
         pitchExtractorRef.current = extractor;
-        // Apply NO filtering for raw voice capture
+        // Apply minimal filtering for voice pitch detection (similar to practice mode)
+        // This ensures actual Hz values are detected and displayed correctly
         await extractor.startFromStream(stream, onPitchUpdate, {
-          minHz: 0, // No minimum - capture all frequencies
-          maxHz: Infinity, // No maximum - capture all frequencies
-          minConfidence: 0.0, // No confidence threshold - capture everything
-          smoothingWindow: 1, // No smoothing - raw data only
-          enabled: false, // DISABLED - no filtering at all
+          minHz: 60, // Minimum frequency for voice (Hz) - ensures valid pitch detection
+          maxHz: 1200, // Maximum frequency for voice (Hz) - typical vocal range
+          minConfidence: 0.3, // Low confidence threshold - capture most voice frequencies
+          smoothingWindow: 3, // Light smoothing for cleaner display
+          enabled: true, // ENABLED - apply filtering to get accurate Hz values
         });
       }
 
@@ -163,6 +163,22 @@ const Recorder: React.FC<RecorderProps> = ({
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
+  // Start recording when triggerRecordingStart becomes true (after countdown)
+  useEffect(() => {
+    if (triggerRecordingStart && !isRecording && !hasStartedRef.current) {
+      // Start recording after countdown completes
+      hasStartedRef.current = true;
+      startRecording();
+    }
+  }, [triggerRecordingStart, isRecording]);
+  
+  // Reset hasStartedRef when recording stops
+  useEffect(() => {
+    if (!isRecording) {
+      hasStartedRef.current = false;
+    }
+  }, [isRecording]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -181,7 +197,12 @@ const Recorder: React.FC<RecorderProps> = ({
 
       {!isRecording ? (
         <button
-          onClick={startRecording}
+          onClick={() => {
+            // Call onRecordingStart which will trigger countdown
+            if (onRecordingStart) {
+              onRecordingStart();
+            }
+          }}
           className='flex items-center gap-2 px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full text-lg font-semibold shadow-lg transition-transform transform hover:scale-105'
         >
           <Mic className='w-6 h-6' />

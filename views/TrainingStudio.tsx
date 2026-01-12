@@ -151,6 +151,8 @@ const TrainingStudio: React.FC = () => {
   const [practiceTime, setPracticeTime] = useState(0);
   const [practiceError, setPracticeError] = useState<string | null>(null);
   const [showCountdown, setShowCountdown] = useState(false);
+  const [showRecordingCountdown, setShowRecordingCountdown] = useState(false);
+  const [triggerRecordingStart, setTriggerRecordingStart] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   const [studentPlaybackSpeed, setStudentPlaybackSpeed] = useState(() => {
     // Load from localStorage if available, otherwise default to 1.0
@@ -187,6 +189,8 @@ const TrainingStudio: React.FC = () => {
   const practiceStartTimeRef = useRef<number | null>(null); // Use ref for callback access
   const referenceDurationRef = useRef<number>(0); // Use ref for callback access
   const isPracticeModeRef = useRef<boolean>(false); // Use ref for callback access
+  const recordingStartTimeRef = useRef<number | null>(null); // Timestamp when recording started (for time mapping like practice)
+  const isRecordingRef = useRef<boolean>(false); // Use ref for callback access
   const followModeStartTimeRef = useRef<number | null>(null); // Track follow mode start time
   const followModePitchExtractorRef = useRef<RealTimePitchExtractor | null>(
     null
@@ -737,6 +741,11 @@ const TrainingStudio: React.FC = () => {
     setAnalysisResult(null);
     // DO NOT clear recordingPitchData here - we need it for graph display in test mode
     // recordingPitchData is only cleared in handleRecordingStart when starting a new recording
+    
+    // Reset recording refs when recording stops
+    isRecordingRef.current = false;
+    recordingStartTimeRef.current = null;
+    setTriggerRecordingStart(false); // Reset trigger
     // Note: Practice mode and recording are separate - recording doesn't affect practice mode
   };
 
@@ -818,48 +827,59 @@ const TrainingStudio: React.FC = () => {
   };
 
   // Handle pitch updates during recording (for analysis)
+  // Make it work EXACTLY like practice mode - same time mapping and flow
   const handleRecordingPitchUpdate = (pitch: PitchPoint) => {
-    // Only used during recording
-    if (!isRecording) {
-      console.warn(
-        "[Recording] Pitch update received but not recording:",
-        pitch
-      );
+    // Use refs to check if recording is active (avoid stale closures)
+    if (!isRecordingRef.current || recordingStartTimeRef.current === null) {
       return;
     }
 
-    // Store recording pitch data separately from practice/student pitch
-    setRecordingPitchData((prev) => {
-      const updated = [...prev, pitch];
+    // Calculate elapsed time since recording started (use ref for latest value)
+    const elapsedTime = (Date.now() - recordingStartTimeRef.current) / 1000;
 
-      // Debug: Log every 10th point to verify data is being collected (more frequent logging)
-      if (
-        updated.length % 10 === 0 ||
-        updated.length === 1 ||
-        updated.length <= 5
-      ) {
+    // Apply 1:1 time mapping (student time = reference time) - same as practice mode
+    const refDuration = referenceDurationRef.current || Infinity;
+
+    // FIX: Don't stop early - allow 10% buffer for full audio capture
+    const mappedTime = Math.min(elapsedTime, refDuration * 1.1);
+
+    // Update recording time for display (cap at reference duration for display)
+    setRecordingTime(Math.min(mappedTime, refDuration));
+
+    // Create pitch point with mapped time (same as practice mode)
+    const mappedPitch: PitchPoint = {
+      frequency: pitch.frequency,
+      midi: pitch.midi,
+      confidence: pitch.confidence,
+      time: mappedTime, // Use mapped time for alignment with reference timeline
+    };
+
+    // Update state - same duplicate detection as practice mode
+    setRecordingPitchData((prev) => {
+      // Check last 3 points (same as practice mode) with increased tolerance
+      const recentPoints = prev.slice(-3);
+      const isDuplicate = recentPoints.some(
+        (p) => Math.abs(p.time - mappedTime) < 0.05 // Same tolerance as practice
+      );
+
+      if (isDuplicate) {
+        return prev; // Skip duplicate
+      }
+
+      // Add new point - this builds the graph continuously as you speak
+      const updated = [...prev, mappedPitch];
+
+      // Only log when pitch is actually detected to reduce console spam
+      if (mappedPitch.frequency) {
         console.log(
-          `[Recording] ✅ Pitch data collected: ${updated.length} points`,
-          {
-            latest: {
-              time: pitch.time?.toFixed(2),
-              frequency: pitch.frequency?.toFixed(1),
-              midi: pitch.midi?.toFixed(1),
-              confidence: pitch.confidence?.toFixed(2),
-            },
-            hasFrequency:
-              pitch.frequency !== null && pitch.frequency !== undefined,
-            totalPoints: updated.length,
-            validFrequencies: updated.filter(
-              (p) => p.frequency !== null && p.frequency !== undefined
-            ).length,
-          }
+          `[Recording] ✅ Pitch: ${mappedPitch.frequency.toFixed(
+            1
+          )}Hz @ ${mappedTime.toFixed(2)}s (${updated.length} points)`
         );
       }
 
       return updated;
     });
-    setRecordingTime(pitch.time);
   };
 
   // Handle pitch updates when student follows reference audio (real-time during playback)
@@ -1357,6 +1377,12 @@ const TrainingStudio: React.FC = () => {
   // Reset student pitch when starting new recording
   // Recording mode is completely separate from practice mode
   const handleRecordingStart = () => {
+    // Show countdown before starting recording
+    setShowRecordingCountdown(true);
+  };
+
+  // Actual recording start (called after countdown completes)
+  const startRecordingAfterCountdown = async () => {
     // Clear recording pitch data
     setRecordingPitchData([]);
 
@@ -1365,8 +1391,15 @@ const TrainingStudio: React.FC = () => {
 
     // Reset recording-specific state
     setRecordingTime(0);
+    
+    // Set recording start time for time mapping (like practice mode)
+    recordingStartTimeRef.current = Date.now();
+    isRecordingRef.current = true;
 
-    console.log("[Recording] Recording started - pitch data cleared");
+    // Trigger the Recorder component to start recording
+    setTriggerRecordingStart(true);
+    
+    console.log("[Recording] Starting recording after countdown - pitch data cleared, time mapping initialized");
   };
 
   const handleAnalyze = async () => {
@@ -2572,11 +2605,7 @@ const TrainingStudio: React.FC = () => {
                   </h3>
                 </div>
                 <CombinedWaveformPitch
-                  key={`test-graph-${recordingPitchData.length}-${
-                    analysisResult?.pitchData?.student?.length || 0
-                  }-${
-                    analysisResult?.pitchData?.reference?.length || 0
-                  }-${isRecording}-${
+                  key={`test-graph-${selectedRef?.id || 'no-ref'}-${
                     analysisResult ? "analyzed" : "not-analyzed"
                   }`}
                   referencePitch={
@@ -2613,54 +2642,32 @@ const TrainingStudio: React.FC = () => {
                       }
                     }
                   }}
-                  studentPitch={(() => {
-                    // Priority: analysis result > follow mode data > recording data
-                    // After analysis: use backend-extracted student pitch (most accurate)
-                    // During/after follow mode: use real-time follow mode pitch data
-                    // During/after recording: use live recording pitch data
-
-                    let studentPitchData: PitchPoint[] = [];
-
-                    if (
+                  studentPitch={
+                    // Make recording mode work EXACTLY like practice mode
+                    // During recording: use recordingPitchData directly (same as practice uses studentPitchData)
+                    isRecording
+                      ? recordingPitchData // Recording: live pitch from real-time extractor (same pattern as practice)
+                      : // After recording: use student pitch from analysisResult (backend-extracted during scoring)
                       analysisResult?.pitchData?.student &&
-                      analysisResult.pitchData.student.length > 0
-                    ) {
-                      // Use analysis result (most accurate)
-                      studentPitchData = analysisResult.pitchData.student.map(
-                        (p: any) => ({
+                        analysisResult.pitchData.student.length > 0
+                      ? analysisResult.pitchData.student.map((p: any) => ({
                           time: p.time || 0,
                           frequency: p.f_hz || null, // CRITICAL: Map f_hz to frequency
                           midi: p.midi || null,
                           confidence: p.confidence || 0.9,
-                        })
-                      );
-
-                      console.log(
-                        `[Graph] ✅ Using analysis result: ${studentPitchData.length} points`
-                      );
-                    } else if (followModePitchData.length > 0) {
-                      // Use follow mode data (real-time during reference playback)
-                      studentPitchData = followModePitchData;
-                      console.log(
-                        `[Graph] ✅ Using follow mode data: ${studentPitchData.length} points`
-                      );
-                    } else if (recordingPitchData.length > 0) {
-                      // Use recording data (from test recording)
-                      studentPitchData = recordingPitchData;
-                      console.log(
-                        `[Graph] ✅ Using recording data: ${studentPitchData.length} points`
-                      );
-                    } else {
-                      console.log(`[Graph] No student pitch data available`);
-                    }
-
-                    return studentPitchData;
-                  })()}
+                        }))
+                      : // After recording stops, preserve recording data so graph remains visible
+                      recordingPitchData && recordingPitchData.length > 0
+                      ? recordingPitchData
+                      : followModePitchData.length > 0
+                      ? followModePitchData
+                      : [] // No student pitch available yet
+                  }
                   isRecording={isRecording || isFollowingReference} // Include follow mode
-                  isPlaying={isPlaying && !isPracticeMode} // Reference audio playing state
+                  isPlaying={false} // Never play audio during recording (unlike practice mode)
                   currentTime={
                     isRecording
-                      ? recordingTime // During recording, use recording time
+                      ? recordingTime // During recording, use recording time - flows like practice mode
                       : isFollowingReference &&
                         refWaveSurfer.current?.isPlaying()
                       ? playbackTime || 0 // Use reference audio playback time during follow mode
@@ -2711,17 +2718,23 @@ const TrainingStudio: React.FC = () => {
                     <span className='inline-flex items-center gap-1 mr-4'>
                       <span className='w-3 h-3 bg-emerald-500 rounded-full'></span>
                       Reference (Green)
+                      {isRecording && (
+                        <span className='text-xs text-emerald-600 ml-1 font-medium'>
+                          - Follow this pitch contour
+                        </span>
+                      )}
                     </span>
                   )}
                   {(recordingPitchData.length > 0 ||
                     (analysisResult?.pitchData?.student &&
-                      analysisResult.pitchData.student.length > 0)) && (
+                      analysisResult.pitchData.student.length > 0) ||
+                    isRecording) && (
                     <span className='inline-flex items-center gap-1'>
                       <span className='w-3 h-3 bg-red-500 rounded-full'></span>
                       Your Recitation (Red)
                       {isRecording && (
-                        <span className='text-xs text-slate-400 ml-1'>
-                          (Live)
+                        <span className='text-xs text-red-600 ml-1 font-medium'>
+                          (Live - Follow the green line)
                         </span>
                       )}
                     </span>
@@ -2742,6 +2755,7 @@ const TrainingStudio: React.FC = () => {
                   referencePitchData={referencePitchData}
                   referenceDuration={referenceDuration}
                   viewMode='pitch'
+                  triggerRecordingStart={triggerRecordingStart}
                 />
               </div>
             ) : (
@@ -3764,6 +3778,20 @@ const TrainingStudio: React.FC = () => {
         }}
         onCancel={() => {
           setShowCountdown(false);
+        }}
+        duration={5}
+        showAudioCue={true}
+      />
+
+      {/* Countdown Overlay - Shows before recording starts */}
+      <Countdown
+        isActive={showRecordingCountdown}
+        onComplete={() => {
+          setShowRecordingCountdown(false);
+          startRecordingAfterCountdown();
+        }}
+        onCancel={() => {
+          setShowRecordingCountdown(false);
         }}
         duration={5}
         showAudioCue={true}
