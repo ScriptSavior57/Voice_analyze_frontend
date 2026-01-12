@@ -134,6 +134,7 @@ const TrainingStudio: React.FC = () => {
   ); // Pitch data when following reference audio
   const [isFollowingReference, setIsFollowingReference] = useState(false); // Track if we're in follow mode
   const [isExtractingRefPitch, setIsExtractingRefPitch] = useState(false);
+  const [pitchExtractionProgress, setPitchExtractionProgress] = useState(0);
   const [recordingTime, setRecordingTime] = useState(0);
   const [playbackTime, setPlaybackTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -436,6 +437,7 @@ const TrainingStudio: React.FC = () => {
       setReferencePitchData([]);
       pitchDataRefIdRef.current = undefined; // Clear ref ID so old graph is immediately hidden
       setIsExtractingRefPitch(true);
+      setPitchExtractionProgress(0); // Reset progress
 
       if (!selectedRef.url && !uploadedRefUrl) {
         console.log("⚠️ No URL available - stopping extraction");
@@ -534,7 +536,10 @@ const TrainingStudio: React.FC = () => {
           pitchData = await extractReferencePitch(
             undefined, // No blob needed
             undefined, // No filename needed
-            selectedRef.id // Use reference_id
+            selectedRef.id, // Use reference_id
+            (progress) => {
+              setPitchExtractionProgress(progress);
+            }
           );
 
           console.log("✅ extractReferencePitch completed - received", pitchData.reference?.length || 0, "pitch points");
@@ -558,7 +563,11 @@ const TrainingStudio: React.FC = () => {
           // Extract pitch using backend (accurate)
           pitchData = await extractReferencePitch(
             refBlob,
-            `reference_${selectedRef.id}.mp3`
+            `reference_${selectedRef.id}.mp3`,
+            undefined, // No reference_id for custom uploads
+            (progress) => {
+              setPitchExtractionProgress(progress);
+            }
           );
         }
 
@@ -689,6 +698,7 @@ const TrainingStudio: React.FC = () => {
         setReferencePitchData([]);
       } finally {
         setIsExtractingRefPitch(false);
+        setPitchExtractionProgress(0); // Reset progress when done
       }
     };
 
@@ -1951,8 +1961,19 @@ const TrainingStudio: React.FC = () => {
                 <div className='text-center py-12 text-slate-500'>
                   <p className='text-lg font-medium mb-2'>Extracting reference pitch...</p>
                   {selectedRef?.title && (
-                    <p className='text-sm text-slate-400'>{selectedRef.title}</p>
+                    <p className='text-sm text-slate-400 mb-4'>{selectedRef.title}</p>
                   )}
+                  {/* Progress bar */}
+                  <div className='w-full max-w-xs mx-auto bg-slate-200 rounded-full h-2 overflow-hidden mb-2'>
+                    <div
+                      className='bg-emerald-600 h-full transition-all duration-300 ease-out rounded-full'
+                      style={{ width: `${Math.max(pitchExtractionProgress, 1)}%` }}
+                    ></div>
+                  </div>
+                  {/* Progress percentage */}
+                  <p className='text-xs text-slate-400 font-medium'>
+                    {pitchExtractionProgress}%
+                  </p>
                 </div>
               ) : (
                 referencePitchData.length > 0 ||
@@ -2529,6 +2550,17 @@ const TrainingStudio: React.FC = () => {
                             {selectedRef.title}
                           </p>
                         )}
+                        {/* Progress bar */}
+                        <div className='w-full max-w-xs mx-auto bg-slate-200 rounded-full h-2 overflow-hidden mb-2'>
+                          <div
+                            className='bg-emerald-600 h-full transition-all duration-300 ease-out rounded-full'
+                            style={{ width: `${Math.max(pitchExtractionProgress, 1)}%` }}
+                          ></div>
+                        </div>
+                        {/* Progress percentage */}
+                        <p className='text-xs text-slate-400 font-medium'>
+                          {pitchExtractionProgress}%
+                        </p>
                       </div>
                     </div>
                   </div>
