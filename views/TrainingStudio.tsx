@@ -54,6 +54,8 @@ const audioBufferToWav = (audioBuffer: AudioBuffer): Blob => {
     }
   };
 
+
+
   // WAV header
   writeString(0, "RIFF");
   view.setUint32(4, 36 + length, true);
@@ -191,6 +193,7 @@ const TrainingStudio: React.FC = () => {
   ); // Pitch extractor for follow mode
   const followModeStreamRef = useRef<MediaStream | null>(null); // Microphone stream for follow mode
   const previousRefIdRef = useRef<string | undefined>(undefined); // Track previous reference ID to detect changes
+  const pitchDataRefIdRef = useRef<string | undefined>(undefined); // Track which reference ID the current pitch data belongs to
   const presetTextSegmentsRef = useRef<any[] | null>(null); // Track preset text segments to preserve them
 
   // WaveSurfer references for synchronized playback
@@ -274,7 +277,7 @@ const TrainingStudio: React.FC = () => {
         if ((!selectedRef || !selectedRef.id || Array.isArray(selectedRef)) && refs.length > 0) {
           const first = refs[0];
           const url = referenceLibraryService.getReferenceAudioUrl(first.id);
-          
+
           // Set selectedRef with all properties including is_preset and text_segments
           const selectedRefData = {
             id: first.id,
@@ -285,13 +288,13 @@ const TrainingStudio: React.FC = () => {
             is_preset: first.is_preset || false,
             text_segments: first.text_segments || [],
           };
-          
+
           setSelectedRef(selectedRefData);
 
           // Check if this is a preset with text_segments and load them
           if (first.is_preset && first.text_segments && first.text_segments.length > 0) {
             console.log(`[InitialLoad] Loading preset text_segments for: ${first.title}`, first.text_segments);
-            
+
             // Convert text_segments to ayatTiming format
             const presetTextSegments = first.text_segments.map((seg: any) => {
               const textValue = seg.text || seg.text_content || '';
@@ -301,14 +304,14 @@ const TrainingStudio: React.FC = () => {
                 end: seg.end || 0,
               };
             });
-            
+
             // Store in ref for useEffect to check
             presetTextSegmentsRef.current = presetTextSegments;
-            
+
             // Count segments with actual text
             const segmentsWithText = presetTextSegments.filter((seg: any) => seg.text && seg.text.trim() !== '').length;
             console.log(`✅ [InitialLoad] Set preset text segments: ${presetTextSegments.length} total, ${segmentsWithText} with text`, presetTextSegments);
-            
+
             // Set timing - use setTimeout to ensure it runs after any clearing effects
             setTimeout(() => {
               setReferenceAyahTiming(presetTextSegments);
@@ -427,10 +430,20 @@ const TrainingStudio: React.FC = () => {
   // Extract reference pitch when reference loads
   useEffect(() => {
     const extractRefPitch = async () => {
+      // CRITICAL: Clear old data and set extraction state FIRST, before any checks
+      // This ensures "extracting..." shows immediately when reference changes
+      console.log("🔄 Starting pitch extraction - setting isExtractingRefPitch to true");
+      setReferencePitchData([]);
+      pitchDataRefIdRef.current = undefined; // Clear ref ID so old graph is immediately hidden
+      setIsExtractingRefPitch(true);
+
       if (!selectedRef.url && !uploadedRefUrl) {
-        setReferencePitchData([]);
+        console.log("⚠️ No URL available - stopping extraction");
+        setIsExtractingRefPitch(false);
         return;
       }
+
+      console.log("✅ Extraction state set to true, proceeding with extraction...");
 
       // Stop practice mode if active (reference is changing)
       // Use refs directly to avoid dependency issues
@@ -457,12 +470,12 @@ const TrainingStudio: React.FC = () => {
       // Clear reference text timing ONLY when reference actually changes
       // BUT: Don't clear if the new reference is a preset with text_segments
       const currentRefId = selectedRef?.id;
-      const isPresetWithText = (selectedRef?.is_preset && 
-        selectedRef?.text_segments && 
+      const isPresetWithText = (selectedRef?.is_preset &&
+        selectedRef?.text_segments &&
         Array.isArray(selectedRef.text_segments) &&
         selectedRef.text_segments.length > 0) ||
         (presetTextSegmentsRef.current && presetTextSegmentsRef.current.length > 0);
-      
+
       if (
         previousRefIdRef.current !== undefined &&
         previousRefIdRef.current !== currentRefId
@@ -476,13 +489,13 @@ const TrainingStudio: React.FC = () => {
           );
         } else {
           // Reference changed to a preset with text - restore from ref if needed
-          const segmentsToRestore = presetTextSegmentsRef.current || 
+          const segmentsToRestore = presetTextSegmentsRef.current ||
             (selectedRef?.text_segments?.map((seg: any) => ({
               text: seg.text || '',
               start: seg.start || 0,
               end: seg.end || 0,
             })) || []);
-          
+
           if (segmentsToRestore.length > 0) {
             setReferenceAyahTiming(segmentsToRestore);
             console.log(
@@ -493,7 +506,8 @@ const TrainingStudio: React.FC = () => {
       }
       previousRefIdRef.current = currentRefId;
 
-      setIsExtractingRefPitch(true);
+      // Extraction state already set at the beginning of useEffect
+      // Now proceed with extraction
       try {
         // CRITICAL: Use reference_id if available (uses backend-stored file)
         // This ensures practice and test modes use the same canonical reference audio
@@ -511,11 +525,19 @@ const TrainingStudio: React.FC = () => {
           console.log(
             `Using reference_id for pitch extraction: ${selectedRef.id}`
           );
+          // Ensure extraction state is true before starting async extraction
+          // This is important when backend has no cached data and needs to extract
+          // State is already set to true at the beginning of useEffect, but we ensure it here too
+          setIsExtractingRefPitch(true);
+          console.log("⏳ Calling extractReferencePitch - backend will start extraction, isExtractingRefPitch is true");
+          
           pitchData = await extractReferencePitch(
             undefined, // No blob needed
             undefined, // No filename needed
             selectedRef.id // Use reference_id
           );
+          
+          console.log("✅ extractReferencePitch completed - received", pitchData.reference?.length || 0, "pitch points");
         } else {
           // Fallback: fetch blob and extract (for custom uploads)
           const url =
@@ -530,6 +552,9 @@ const TrainingStudio: React.FC = () => {
           const response = await fetch(url);
           const refBlob = await response.blob();
 
+          // Ensure extraction state is true before starting async extraction
+          setIsExtractingRefPitch(true);
+
           // Extract pitch using backend (accurate)
           pitchData = await extractReferencePitch(
             refBlob,
@@ -539,6 +564,8 @@ const TrainingStudio: React.FC = () => {
 
         const extractedReferencePitch = pitchData.reference || [];
         setReferencePitchData(extractedReferencePitch);
+        // Mark this pitch data as belonging to the current reference
+        pitchDataRefIdRef.current = selectedRef?.id;
 
         // Debug: Log reference pitch extraction
         console.log("📊 Reference pitch extracted:", {
@@ -551,12 +578,12 @@ const TrainingStudio: React.FC = () => {
 
         // Extract text timing if available
         // BUT: Don't overwrite preset text_segments if they already exist
-        const isPresetWithText = (selectedRef.is_preset && 
-          selectedRef.text_segments && 
+        const isPresetWithText = (selectedRef.is_preset &&
+          selectedRef.text_segments &&
           Array.isArray(selectedRef.text_segments) &&
           selectedRef.text_segments.length > 0) ||
           (presetTextSegmentsRef.current && presetTextSegmentsRef.current.length > 0);
-        
+
         console.log("📝 Checking for text timing:", {
           hasAyahTiming: !!pitchData.ayah_timing,
           ayahTimingLength: pitchData.ayah_timing?.length || 0,
@@ -571,13 +598,13 @@ const TrainingStudio: React.FC = () => {
         // Only use backend-extracted timing if NOT a preset or if preset has no text_segments
         if (isPresetWithText) {
           // Restore preset text from ref if needed
-          const segmentsToUse = presetTextSegmentsRef.current || 
+          const segmentsToUse = presetTextSegmentsRef.current ||
             (selectedRef.text_segments?.map((seg: any) => ({
               text: seg.text || '',
               start: seg.start || 0,
               end: seg.end || 0,
             })) || []);
-          
+
           // Always set if segments are available (even if referenceAyahTiming already has data)
           // This ensures preset text is always loaded when preset is selected
           if (segmentsToUse.length > 0) {
@@ -1738,6 +1765,14 @@ const TrainingStudio: React.FC = () => {
         savedReference.id
       );
       setUploadedRefUrl(null); // Clear blob URL since we're using library now
+
+      // IMPORTANT: Clear old graph and set extraction state BEFORE setting new selectedRef
+      // This ensures "extracting..." shows immediately instead of previous graph
+      // Set extraction state first to immediately show "Extracting Pitch Data..."
+      setIsExtractingRefPitch(true);
+      setReferencePitchData([]);
+      pitchDataRefIdRef.current = undefined; // Clear ref ID so old graph is immediately hidden
+
       setSelectedRef({
         id: savedReference.id,
         title: savedReference.title,
@@ -1798,8 +1833,14 @@ const TrainingStudio: React.FC = () => {
               setUploadedRefUrl(null);
               setStudentBlob(null);
               setAnalysisResult(null);
-              
-              // Set selectedRef first
+
+              // IMPORTANT: Clear old graph and set extraction state BEFORE setting new selectedRef
+              // This ensures "extracting..." shows immediately instead of previous graph
+              setReferencePitchData([]);
+              pitchDataRefIdRef.current = undefined; // Clear ref ID so old graph is immediately hidden
+              setIsExtractingRefPitch(true);
+
+              // Set selectedRef - this will trigger useEffect to start extraction
               setSelectedRef({
                 id: ref.id,
                 title: ref.title,
@@ -1814,7 +1855,7 @@ const TrainingStudio: React.FC = () => {
               if (ref.is_preset && ref.text_segments && ref.text_segments.length > 0) {
                 // Debug: Log raw text_segments to see their structure
                 console.log(`[PresetLoad] Raw text_segments from API:`, ref.text_segments);
-                
+
                 // Convert text_segments to ayatTiming format - check multiple possible text property names
                 const presetTextSegments = ref.text_segments.map((seg: any) => {
                   const textValue = seg.text || seg.text_content || (typeof seg === 'string' ? seg : '');
@@ -1826,14 +1867,14 @@ const TrainingStudio: React.FC = () => {
                   console.log(`[PresetLoad] Mapped segment:`, result);
                   return result;
                 });
-                
+
                 // Store in ref for useEffect to check
                 presetTextSegmentsRef.current = presetTextSegments;
-                
+
                 // Count segments with actual text
                 const segmentsWithText = presetTextSegments.filter((seg: any) => seg.text && seg.text.trim() !== '').length;
                 console.log(`✅ Set preset text segments: ${presetTextSegments.length} total, ${segmentsWithText} with text`, presetTextSegments);
-                
+
                 // Set timing - use setTimeout to ensure it runs after useEffect clears it
                 setTimeout(() => {
                   setReferenceAyahTiming(presetTextSegments);
@@ -1860,7 +1901,7 @@ const TrainingStudio: React.FC = () => {
                 disabled={isLoadingReferences}
               />
             </label>
-            
+
             {/* Upload Progress Bar */}
             {isLoadingReferences && uploadProgress > 0 && (
               <div className='w-full bg-slate-200 rounded-full h-2 overflow-hidden'>
@@ -1870,7 +1911,7 @@ const TrainingStudio: React.FC = () => {
                 ></div>
               </div>
             )}
-            
+
             {/* Upload Progress Percentage */}
             {isLoadingReferences && uploadProgress > 0 && (
               <div className='text-xs text-slate-500 text-center'>
@@ -1900,15 +1941,26 @@ const TrainingStudio: React.FC = () => {
               </div>
             </div>
             <div className='bg-slate-50 p-6 rounded-xl border border-slate-200 shadow-inner'>
-              {isExtractingRefPitch ? (
+              {/* Show "Extracting..." if:
+                  1. isExtractingRefPitch is true, OR
+                  2. The current pitch data doesn't belong to the current selectedRef (old data from previous file)
+              */}
+              {isExtractingRefPitch || 
+               (pitchDataRefIdRef.current !== undefined && 
+                pitchDataRefIdRef.current !== selectedRef?.id) ? (
                 <div className='text-center py-12 text-slate-500'>
-                  <p>Extracting reference pitch...</p>
+                  <p className='text-lg font-medium mb-2'>Extracting Pitch Data...</p>
+                  {selectedRef?.title && (
+                    <p className='text-sm text-slate-400'>{selectedRef.title}</p>
+                  )}
                 </div>
-              ) : referencePitchData.length > 0 ||
+              ) : (
+                referencePitchData.length > 0 ||
                 (analysisResult?.pitchData?.reference &&
                   analysisResult.pitchData.reference.length > 0) ||
                 (analysisResult?.pitchData?.student &&
-                  analysisResult.pitchData.student.length > 0) ? (
+                  analysisResult.pitchData.student.length > 0)
+              ) ? (
                 <div>
                   {/* Hidden Waveform to load audio for playback controls */}
                   <div className='hidden'>
@@ -2012,6 +2064,8 @@ const TrainingStudio: React.FC = () => {
                   </div>
 
                   {/* Prominent reference pitch graph - shows student pitch during practice */}
+                  {/* Only show this section when NOT extracting */}
+                  {!isExtractingRefPitch && (
                   <div className='mb-4'>
                     <div className='flex items-center justify-between mb-3'>
                       <h3 className='text-lg font-semibold text-slate-700 flex items-center gap-2'>
@@ -2163,19 +2217,19 @@ const TrainingStudio: React.FC = () => {
                         }
                       }}
                     />
-                    
+
                     {/* Quranic Text Display - Always show below waveform when text segments are available */}
                     {(() => {
                       // Get text segments - prioritize referenceAyahTiming first (where preset segments are stored)
                       let textSegments: any[] = [];
-                      
+
                       // First check referenceAyahTiming (where preset segments get stored by useEffect and initial load)
                       if (referenceAyahTiming && referenceAyahTiming.length > 0) {
                         textSegments = referenceAyahTiming;
                         const segmentsWithText = textSegments.filter((seg: any) => seg.text && seg.text.trim() !== '').length;
                         console.log(`[TextDisplay] Using referenceAyahTiming: ${textSegments.length} total, ${segmentsWithText} with text`);
                       }
-                      
+
                       // Fallback: Check selectedRef.text_segments if referenceAyahTiming is empty
                       if (textSegments.length === 0 && selectedRef && !Array.isArray(selectedRef) && selectedRef.text_segments && Array.isArray(selectedRef.text_segments) && selectedRef.text_segments.length > 0) {
                         textSegments = selectedRef.text_segments.map((seg: any) => {
@@ -2188,11 +2242,11 @@ const TrainingStudio: React.FC = () => {
                         });
                         console.log(`[TextDisplay] Using selectedRef.text_segments as fallback (${textSegments.length} segments)`);
                       }
-                      
+
                       const shouldShow = textSegments.length > 0 && referenceDuration > 0;
-                      
+
                       console.log(`[TextDisplay] Final check: textSegments.length=${textSegments.length}, referenceDuration=${referenceDuration}, shouldShow=${shouldShow}`);
-                      
+
                       return shouldShow ? (
                         <div className='mt-4'>
                           <AyahTextDisplay
@@ -2223,7 +2277,7 @@ const TrainingStudio: React.FC = () => {
                         </div>
                       ) : null;
                     })()}
-                    
+
                     <div className='mt-3 text-xs text-slate-500 text-center'>
                       <span className='inline-flex items-center gap-1 mr-4'>
                         <span className='w-3 h-3 bg-emerald-500 rounded-full'></span>
@@ -2300,6 +2354,7 @@ const TrainingStudio: React.FC = () => {
                         </div>
                       )}
                   </div>
+                  )}
 
                   {/* Audio controls for reference */}
                   <div className='flex justify-center items-center gap-4 mt-8 flex-wrap'>
@@ -2455,6 +2510,31 @@ const TrainingStudio: React.FC = () => {
             {/* Pitch Graph - Show live during recording, preserved after recording, analysis result after analysis */}
             {/* MOVED BEFORE the recording section so it shows during AND after recording */}
             {(() => {
+              // Don't show graph if extracting (old graph from previous file)
+              if (isExtractingRefPitch || 
+                  (pitchDataRefIdRef.current !== undefined && 
+                   pitchDataRefIdRef.current !== selectedRef?.id)) {
+                return (
+                  <div className='mb-4'>
+                    <div className='mb-2'>
+                      <h3 className='text-sm font-semibold text-slate-700 mb-2'>
+                        Pitch Comparison Graph
+                      </h3>
+                    </div>
+                    <div className='bg-slate-50 p-6 rounded-xl border border-slate-200 shadow-inner'>
+                      <div className='text-center py-12 text-slate-500'>
+                        <p className='mb-2 text-lg font-medium'>Extracting reference pitch...</p>
+                        {selectedRef?.title && (
+                          <p className='mb-4 text-sm text-slate-600 font-medium'>
+                            {selectedRef.title}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              
               const hasRefPitch =
                 referencePitchData.length > 0 ||
                 (analysisResult?.pitchData?.reference &&
