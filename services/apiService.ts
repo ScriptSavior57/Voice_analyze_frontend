@@ -271,8 +271,7 @@ export const analyzeRecitation = async (
 export const extractReferencePitch = async (
   audioBlob?: Blob,
   filename: string = "reference.mp3",
-  referenceId?: string,
-  onProgress?: (progress: number) => void
+  referenceId?: string
 ): Promise<PitchDataResponse> => {
   // Use environment variable or default to production backend URL
   const API_URL = import.meta.env.VITE_API_URL || "http://65.108.141.170:8000";
@@ -293,115 +292,46 @@ export const extractReferencePitch = async (
   }
 
   try {
-    // Use XMLHttpRequest for progress tracking
-    return new Promise<PitchDataResponse>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-
-      // Track upload progress (0-50%) if uploading blob
-      if (audioBlob) {
-        xhr.upload.addEventListener("progress", (e) => {
-          if (e.lengthComputable && onProgress) {
-            const uploadProgress = Math.round((e.loaded / e.total) * 50);
-            onProgress(uploadProgress);
-          }
-        });
-      } else if (referenceId && onProgress) {
-        // For library references, simulate progress (checking cache, then extracting)
-        onProgress(10); // Start with 10% (checking cache)
-      }
-
-      xhr.addEventListener("load", () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            const data = JSON.parse(xhr.responseText);
-            
-            // Simulate progress completion
-            if (onProgress) {
-              onProgress(100);
-            }
-            
-            // Convert backend format to frontend format
-            const pitchData: PitchDataResponse = {
-              reference: (data.reference || []).map(
-                (p: any) =>
-                  ({
-                    time: p.time,
-                    f_hz: p.f_hz,
-                    midi: p.midi,
-                    confidence: p.confidence || 0.9,
-                  } as PitchData)
-              ),
-              student: data.student || [],
-              ayah_timing: data.ayah_timing || [],
-            };
-
-            // Debug: Log received ayah_timing data
-            if (pitchData.ayah_timing && pitchData.ayah_timing.length > 0) {
-              console.log(`[apiService] Received ${pitchData.ayah_timing.length} text segments from backend`);
-            }
-
-            resolve(pitchData);
-          } catch (error) {
-            reject(new Error(`Failed to parse response: ${error}`));
-          }
-        } else {
-          reject(new Error(`Pitch extraction failed: ${xhr.status} - ${xhr.responseText}`));
-        }
-      });
-
-      xhr.addEventListener("error", () => {
-        reject(new Error("Network error during pitch extraction"));
-      });
-
-      xhr.addEventListener("loadstart", () => {
-        if (referenceId && onProgress) {
-          // For library references, simulate progress during processing
-          // Start at 20% (after cache check), then gradually increase
-          let progress = 20;
-          onProgress(progress);
-          
-          // Simulate gradual progress during extraction (20-90%)
-          const progressInterval = setInterval(() => {
-            if (progress < 90) {
-              progress += 5;
-              onProgress(progress);
-            } else {
-              clearInterval(progressInterval);
-            }
-          }, 500); // Update every 500ms
-          
-          // Clear interval when request completes
-          xhr.addEventListener("loadend", () => {
-            clearInterval(progressInterval);
-          });
-        } else if (audioBlob && onProgress) {
-          // For blob uploads, progress is tracked via upload event
-          // After upload completes, simulate processing progress (50-90%)
-          xhr.addEventListener("loadstart", () => {
-            if (onProgress) {
-              let progress = 50;
-              onProgress(progress);
-              
-              const progressInterval = setInterval(() => {
-                if (progress < 90) {
-                  progress += 5;
-                  onProgress(progress);
-                } else {
-                  clearInterval(progressInterval);
-                }
-              }, 500);
-              
-              xhr.addEventListener("loadend", () => {
-                clearInterval(progressInterval);
-              });
-            }
-          });
-        }
-      });
-
-      xhr.open("POST", `${API_URL}/api/extract-pitch`);
-      xhr.send(formData);
+    const response = await fetch(`${API_URL}/api/extract-pitch`, {
+      method: "POST",
+      body: formData,
     });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `Pitch extraction failed: ${response.status} - ${errorText}`
+      );
+    }
+
+    const data = await response.json();
+
+    // Convert backend format to frontend format
+    // Backend returns: { reference: [{time, f_hz, midi, confidence}, ...], student: [], ayah_timing: [...] }
+    // Frontend expects: { reference: PitchData[], student: PitchData[], ayah_timing?: AyahTiming[] }
+    const pitchData: PitchDataResponse = {
+      reference: (data.reference || []).map(
+        (p: any) =>
+          ({
+            time: p.time,
+            f_hz: p.f_hz,
+            midi: p.midi,
+            confidence: p.confidence || 0.9,
+          } as PitchData)
+      ),
+      student: data.student || [],
+      ayah_timing: data.ayah_timing || [], // Include text timing if available
+    };
+
+    // Debug: Log received ayah_timing data
+    if (pitchData.ayah_timing && pitchData.ayah_timing.length > 0) {
+      console.log(`[apiService] Received ${pitchData.ayah_timing.length} text segments from backend`);
+      console.log(`[apiService] Segments:`, pitchData.ayah_timing);
+    } else {
+      console.log(`[apiService] No text segments received from backend`);
+    }
+
+    return pitchData;
   } catch (error) {
     console.error("Error extracting reference pitch:", error);
     throw error;
