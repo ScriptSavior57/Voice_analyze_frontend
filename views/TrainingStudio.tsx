@@ -11,11 +11,14 @@ import FullScreenTrainingMode from "../components/FullScreenTrainingMode";
 import AyahTextDisplay from "../components/AyahTextDisplay";
 import PronunciationAlerts from "../components/PronunciationAlerts";
 import ReferenceLibrary from "../components/ReferenceLibrary";
+import QariSelector from "../components/QariSelector";
 import {
   analyzeRecitation,
   extractReferencePitch,
 } from "../services/apiService";
 import { progressService, ProgressData } from "../services/progressService";
+import { useSelector } from "react-redux";
+import { RootState } from "../store";
 
 import { APP_COLORS } from "../constants";
 import { AnalysisResult, PitchData, PitchDataResponse } from "../types";
@@ -109,6 +112,8 @@ const convertRecordedAudioToWav = async (blob: Blob): Promise<Blob> => {
 };
 
 const TrainingStudio: React.FC = () => {
+  const { user } = useSelector((state: RootState) => state.auth);
+  const userRole = user?.role || 'public';
   const [selectedRef, setSelectedRef] = useState<any>([]);
   const [studentBlob, setStudentBlob] = useState<Blob | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -259,23 +264,80 @@ const TrainingStudio: React.FC = () => {
     }
   }, [practiceAudioUrl, studentPlaybackSpeed]);
 
-  // Load reference library on mount (basic single-user library)
+  // Load reference library on mount (role-based access)
   useEffect(() => {
     const loadReferences = async () => {
       try {
         setIsLoadingReferences(true);
         setReferenceLibraryError(null);
 
-        // Use cached references if available
-        const cached = referenceLibraryService.getCachedReferences();
-        if (cached && cached.length > 0) {
-          setReferenceLibrary(cached);
+        // Load references based on user role
+        let refs: any[] = [];
+        
+        if (userRole === 'public' || !user) {
+          // Public users: get demo/public content only (use regular references endpoint)
+          // This ensures they see admin-uploaded public references
+          try {
+            refs = await referenceLibraryService.getReferences();
+            // Filter to only public references (backend should already filter, but double-check)
+            if (refs.length === 0) {
+              // Try platform endpoint as fallback
+              const { getAvailableContent } = await import("../services/platformService");
+              const contentData = await getAvailableContent();
+              if (contentData.content && contentData.content.length > 0) {
+                refs = contentData.content.map((item: any) => ({
+                  id: item.id || item.reference_id,
+                  title: item.title || `Demo Content`,
+                  maqam: item.maqam,
+                  filename: item.filename || item.title || "",
+                  file_path: item.file_path || "",
+                  duration: item.duration || 0,
+                  upload_date: item.upload_date || "",
+                  file_size: item.file_size || 0,
+                  is_preset: item.is_preset || false,
+                  text_segments: item.text_segments || [],
+                }));
+              }
+            }
+          } catch (err) {
+            console.warn("Failed to load public content:", err);
+            refs = [];
+          }
+        } else if (userRole === 'student') {
+          // Students: get their Qari's content
+          try {
+            const { getAvailableContent } = await import("../services/platformService");
+            const contentData = await getAvailableContent();
+            if (contentData.content && contentData.content.length > 0) {
+              refs = contentData.content.map((item: any) => ({
+                id: item.reference_id || item.id,
+                title: item.title || item.reference_title || `Surah ${item.surah_number || 'N/A'}`,
+                maqam: item.maqam,
+                filename: item.title || item.reference_title || "",
+                file_path: item.file_path || "",
+                duration: item.duration || item.reference_duration || 0,
+                upload_date: item.upload_date || item.created_at || "",
+                file_size: item.file_size || 0,
+                is_preset: item.is_preset || false,
+                text_segments: item.text_segments || [],
+              }));
+            } else if (contentData.message) {
+              setReferenceLibraryError(contentData.message);
+            }
+          } catch (err: any) {
+            setReferenceLibraryError(err.message || "Failed to load content. Please select a Qari.");
+          }
+        } else {
+          // Qari and Admin: use regular library service
+          const cached = referenceLibraryService.getCachedReferences();
+          if (cached && cached.length > 0) {
+            setReferenceLibrary(cached);
+          }
+          refs = await referenceLibraryService.getReferences();
+          referenceLibraryService.cacheReferences(refs);
         }
-
-        // Always try to refresh from backend
-        const refs = await referenceLibraryService.getReferences();
+        
         setReferenceLibrary(refs);
-        referenceLibraryService.cacheReferences(refs);
 
         // If no reference selected yet and we have library entries, pick first
         if ((!selectedRef || !selectedRef.id || Array.isArray(selectedRef)) && refs.length > 0) {
@@ -1753,6 +1815,13 @@ const TrainingStudio: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Check if user can upload (only Admin and Qari can upload)
+    if (userRole === 'public' || !user || (userRole !== 'admin' && userRole !== 'qari')) {
+      alert("Only Admin and Qari users can upload references. Please login or register as Admin/Qari to upload content.");
+      e.target.value = ''; // Reset file input
+      return;
+    }
+
     // Validate file type
     if (!file.type.startsWith("audio/")) {
       alert("Please upload a valid audio file");
@@ -1767,6 +1836,10 @@ const TrainingStudio: React.FC = () => {
       // Extract title from filename (remove extension)
       const title = file.name.replace(/\.[^/.]+$/, "") || file.name;
 
+      // For admins, mark as public by default so public users can see it
+      // Qari content is private by default
+      const isPublic = userRole === 'admin';
+
       // Upload to library and save automatically with progress tracking
       const savedReference = await referenceLibraryService.uploadReference(
         file,
@@ -1774,7 +1847,8 @@ const TrainingStudio: React.FC = () => {
         "Custom Upload", // Default maqam, user can edit later if needed
         (progress) => {
           setUploadProgress(progress);
-        }
+        },
+        isPublic
       );
 
       console.log("Reference saved to library:", savedReference);
@@ -1841,15 +1915,59 @@ const TrainingStudio: React.FC = () => {
   };
 
   return (
-    <div className='max-w-7xl mx-auto p-6 pb-20'>
+      <div className='max-w-7xl mx-auto p-6 pb-20'>
       {/* Header Section */}
       <div className='flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100'>
         <div>
-          <h1 className='text-3xl font-bold text-slate-800'>Training Studio</h1>
+          <h1 className='text-3xl font-bold text-slate-800'>
+            {userRole === 'public' ? 'Training Studio (Demo)' : 'Training Studio'}
+          </h1>
           <p className='text-slate-500'>
-            Compare your recitation with a reference track
+            {userRole === 'public' 
+              ? 'Demo mode: Try the platform with sample content. Register for full features.'
+              : 'Compare your recitation with a reference track'}
           </p>
         </div>
+
+        {/* Qari Selector for Students */}
+        {userRole === 'student' && (
+          <div className="mb-6">
+            <QariSelector
+              onQariSelected={async () => {
+                // Reload references after Qari selection
+                try {
+                  const { getAvailableContent } = await import("../services/platformService");
+                  const contentData = await getAvailableContent();
+                  if (contentData.content && contentData.content.length > 0) {
+                    const refs = contentData.content.map((item) => ({
+                      id: item.reference_id,
+                      title: item.reference_title || `Surah ${item.surah_number || 'N/A'}`,
+                      maqam: item.maqam,
+                      filename: item.reference_title || "",
+                      file_path: "",
+                      duration: item.reference_duration || 0,
+                      upload_date: item.created_at || "",
+                      file_size: 0,
+                      is_preset: false,
+                    }));
+                    setReferenceLibrary(refs);
+                    if (refs.length > 0) {
+                      const url = referenceLibraryService.getReferenceAudioUrl(refs[0].id);
+                      setSelectedRef({
+                        id: refs[0].id,
+                        title: refs[0].title,
+                        url,
+                        ...refs[0],
+                      });
+                    }
+                  }
+                } catch (err) {
+                  console.error("Failed to reload content:", err);
+                }
+              }}
+            />
+          </div>
+        )}
 
         <div className='flex items-center gap-4'>
           {/* Reference Library Selector */}
@@ -1923,17 +2041,23 @@ const TrainingStudio: React.FC = () => {
           />
 
           <div className='flex flex-col gap-2'>
-            <label className='flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg cursor-pointer transition-colors text-sm font-medium shadow-sm shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed' style={{ pointerEvents: isLoadingReferences ? 'none' : 'auto' }}>
-              <Upload size={16} />
-              {isLoadingReferences ? 'Uploading...' : 'Upload Ref'}
-              <input
-                type='file'
-                accept='audio/*'
-                onChange={handleFileUpload}
-                className='hidden'
-                disabled={isLoadingReferences}
-              />
-            </label>
+            {(userRole === 'public' || !user || (userRole !== 'admin' && userRole !== 'qari')) ? (
+              <div className='px-4 py-2.5 bg-slate-300 text-slate-600 rounded-lg text-sm font-medium text-center'>
+                Login as Admin/Qari to upload
+              </div>
+            ) : (
+              <label className='flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg cursor-pointer transition-colors text-sm font-medium shadow-sm shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed' style={{ pointerEvents: isLoadingReferences ? 'none' : 'auto' }}>
+                <Upload size={16} />
+                {isLoadingReferences ? 'Uploading...' : 'Upload Ref'}
+                <input
+                  type='file'
+                  accept='audio/*'
+                  onChange={handleFileUpload}
+                  className='hidden'
+                  disabled={isLoadingReferences}
+                />
+              </label>
+            )}
 
             {/* Upload Progress Bar */}
             {isLoadingReferences && uploadProgress > 0 && (

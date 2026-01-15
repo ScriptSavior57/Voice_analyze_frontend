@@ -1,4 +1,5 @@
 import { AnalysisResult, PitchDataResponse, PitchData, TrainingFeedback } from "../types";
+import { getAuthHeader } from "./authService";
 
 // Helper function to convert AudioBuffer to WAV Blob
 const audioBufferToWav = (audioBuffer: AudioBuffer): Blob => {
@@ -293,6 +294,9 @@ export const extractReferencePitch = async (
 
   try {
     const response = await fetch(`${API_URL}/api/extract-pitch`, {
+      headers: {
+        ...getAuthHeader(),
+      },
       method: "POST",
       body: formData,
     });

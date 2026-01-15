@@ -1,17 +1,10 @@
-export enum UserRole {
-  SUPER_ADMIN = 'SUPER_ADMIN',
-  CENTRE_ADMIN = 'CENTRE_ADMIN',
-  TEACHER = 'TEACHER',
-  STUDENT = 'STUDENT'
-}
+// NOTE:
+// The main authentication/user type is defined in `services/authService.ts`,
+// which already matches the backend roles: "admin" | "qari" | "student" | "public".
+// This legacy UserRole/User definition was from an earlier prototype and is no longer used.
+// We replace it with a lightweight alias that stays compatible with the backend.
 
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  centreId: string;
-}
+export type UserRole = "admin" | "qari" | "student" | "public";
 
 export interface PracticeSession {
   id: string;

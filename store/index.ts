@@ -5,9 +5,11 @@ import uiReducer from './slices/uiSlice';
 import libraryReducer from './slices/librarySlice';
 import practiceReducer from './slices/practiceSlice';
 import analysisReducer from './slices/analysisSlice';
+import authReducer from './slices/authSlice';
 
 export const store = configureStore({
   reducer: {
+    auth: authReducer,
     audio: audioReducer,
     pitch: pitchReducer,
     ui: uiReducer,

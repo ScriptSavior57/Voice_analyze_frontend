@@ -5,8 +5,10 @@
  * IMPORTANT: Uses the same API base URL as the main scoring API,
  * so it works both in local dev and on your deployed server.
  */
+import { getAuthHeader } from "./authService";
+
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://65.108.141.170:8000";
+  import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export interface TextSegment {
   text: string;
@@ -41,13 +43,15 @@ class ReferenceLibraryService {
     audioFile: File,
     title: string,
     maqam?: string,
-    onProgress?: (progress: number) => void
+    onProgress?: (progress: number) => void,
+    isPublic: boolean = false
   ): Promise<ReferenceAudio> {
     return new Promise((resolve, reject) => {
       const formData = new FormData();
       formData.append('file', audioFile);
       if (title) formData.append('title', title);
       if (maqam) formData.append('maqam', maqam);
+      formData.append('is_public', isPublic.toString());
 
       const xhr = new XMLHttpRequest();
 
@@ -90,6 +94,13 @@ class ReferenceLibraryService {
 
       // Start upload
       xhr.open('POST', `${API_BASE_URL}/api/references/upload`);
+      
+      // Add authentication header
+      const authHeader = getAuthHeader();
+      if (authHeader.Authorization) {
+        xhr.setRequestHeader('Authorization', authHeader.Authorization);
+      }
+      
       xhr.send(formData);
     });
   }
@@ -99,7 +110,11 @@ class ReferenceLibraryService {
    */
   async getReferences(): Promise<ReferenceAudio[]> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/references`);
+      const response = await fetch(`${API_BASE_URL}/api/references`, {
+        headers: {
+          ...getAuthHeader(),
+        },
+      });
 
       if (!response.ok) {
         // If 404 or empty response, return empty array (no references yet)
@@ -126,7 +141,11 @@ class ReferenceLibraryService {
    * Get a specific reference by ID
    */
   async getReference(refId: string): Promise<ReferenceAudio> {
-    const response = await fetch(`${API_BASE_URL}/api/references/${refId}`);
+    const response = await fetch(`${API_BASE_URL}/api/references/${refId}`, {
+      headers: {
+        ...getAuthHeader(),
+      },
+    });
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -150,6 +169,9 @@ class ReferenceLibraryService {
    */
   async deleteReference(refId: string): Promise<void> {
     const response = await fetch(`${API_BASE_URL}/api/references/${refId}`, {
+      headers: {
+        ...getAuthHeader(),
+      },
       method: 'DELETE',
     });
 
@@ -217,6 +239,9 @@ class ReferenceLibraryService {
 
     const response = await fetch(`${API_BASE_URL}/api/admin/presets`, {
       method: 'POST',
+      headers: {
+        ...getAuthHeader(),
+      },
       body: formData,
     });
 
@@ -233,7 +258,11 @@ class ReferenceLibraryService {
    */
   async getPresets(): Promise<ReferenceAudio[]> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/admin/presets`);
+      const response = await fetch(`${API_BASE_URL}/api/admin/presets`, {
+        headers: {
+          ...getAuthHeader(),
+        },
+      });
 
       if (!response.ok) {
         // If 404 or empty response, return empty array (no presets yet)
@@ -261,7 +290,11 @@ class ReferenceLibraryService {
    * Get a specific preset by ID
    */
   async getPreset(presetId: string): Promise<ReferenceAudio> {
-    const response = await fetch(`${API_BASE_URL}/api/admin/presets/${presetId}`);
+    const response = await fetch(`${API_BASE_URL}/api/admin/presets/${presetId}`, {
+      headers: {
+        ...getAuthHeader(),
+      },
+    });
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -289,6 +322,9 @@ class ReferenceLibraryService {
 
     const response = await fetch(`${API_BASE_URL}/api/admin/presets/${presetId}`, {
       method: 'PUT',
+      headers: {
+        ...getAuthHeader(),
+      },
       body: formData,
     });
 
@@ -306,6 +342,9 @@ class ReferenceLibraryService {
   async deletePreset(presetId: string): Promise<void> {
     const response = await fetch(`${API_BASE_URL}/api/admin/presets/${presetId}`, {
       method: 'DELETE',
+      headers: {
+        ...getAuthHeader(),
+      },
     });
 
     if (!response.ok) {
