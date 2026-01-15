@@ -9,14 +9,14 @@ import StudentProgressView from './views/StudentProgress';
 import Login from './components/Login';
 import Register from './components/Register';
 import QariSelector from './components/QariSelector';
-import { Mic2, LayoutDashboard, Users, BookOpen, Settings, LogOut, BarChart3, User } from 'lucide-react';
+import { Mic2, LayoutDashboard, Users, BookOpen, Settings, LogOut, BarChart3, User, Monitor } from 'lucide-react';
 
 const App: React.FC = () => {
   const dispatch = useDispatch();
   const { isAuthenticated, user, isLoading } = useSelector((state: RootState) => state.auth);
   const [showRegister, setShowRegister] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false); // Control when to show login/register
-  const [activeTab, setActiveTab] = useState<'training' | 'dashboard' | 'progress' | 'admin'>('training');
+  const [activeTab, setActiveTab] = useState<'training' | 'dashboard' | 'progress' | 'admin' | 'user-management' | 'platform-monitoring'>('training');
 
   useEffect(() => {
     // Try to fetch current user if token exists
@@ -112,8 +112,22 @@ const App: React.FC = () => {
                 onClick={() => setActiveTab('admin')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'admin' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
               >
-                <Settings size={20} />
+                <BookOpen size={20} />
                 <span className="font-medium">Preset Manager</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('user-management')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'user-management' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+              >
+                <Users size={20} />
+                <span className="font-medium">User Management</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('platform-monitoring')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'platform-monitoring' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+              >
+                <Monitor size={20} />
+                <span className="font-medium">Platform Monitoring</span>
               </button>
             </>
           )}
@@ -241,7 +255,13 @@ const App: React.FC = () => {
                 <QariDashboard />
               )}
               {activeTab === 'admin' && isAuthenticated && userRole === 'admin' && (
-                <AdminMode />
+                <AdminMode view="presets" />
+              )}
+              {activeTab === 'user-management' && isAuthenticated && userRole === 'admin' && (
+                <AdminMode view="users" />
+              )}
+              {activeTab === 'platform-monitoring' && isAuthenticated && userRole === 'admin' && (
+                <AdminMode view="monitoring" />
               )}
 
               {/* Fallback message when trying to access restricted tabs in public mode */}

@@ -362,3 +362,327 @@ export const getQariCommissionStats = async (): Promise<{
 
   return response.json();
 };
+
+/**
+ * Admin: List all users
+ */
+export interface AdminUser {
+  id: string;
+  email: string;
+  full_name?: string;
+  role: "admin" | "qari" | "student" | "public";
+  is_approved: boolean;
+  is_active: boolean;
+  referral_code?: string;
+  commission_rate: number;
+  created_at: string;
+  last_login?: string;
+}
+
+export const listAllUsers = async (role?: string): Promise<{
+  users: AdminUser[];
+  count: number;
+}> => {
+  const url = role 
+    ? `${API_URL}/api/platform/admin/users?role=${role}`
+    : `${API_URL}/api/platform/admin/users`;
+  const response = await fetch(url, {
+    headers: {
+      ...getAuthHeader(),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to list users");
+  }
+
+  return response.json();
+};
+
+/**
+ * Admin: Get user by ID
+ */
+export const getUser = async (userId: string): Promise<AdminUser> => {
+  const response = await fetch(`${API_URL}/api/platform/admin/users/${userId}`, {
+    headers: {
+      ...getAuthHeader(),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to get user");
+  }
+
+  return response.json();
+};
+
+/**
+ * Admin: Update user
+ */
+export const updateUser = async (
+  userId: string,
+  data: {
+    full_name?: string;
+    role?: string;
+    is_approved?: boolean;
+    is_active?: boolean;
+    commission_rate?: number;
+  }
+): Promise<AdminUser> => {
+  const response = await fetch(`${API_URL}/api/platform/admin/users/${userId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeader(),
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new Error(error.detail || "Failed to update user");
+  }
+
+  return response.json();
+};
+
+/**
+ * Admin: Create user
+ */
+export const createUser = async (data: {
+  email: string;
+  password: string;
+  full_name?: string;
+  role: "admin" | "qari" | "student";
+  is_approved?: boolean;
+  is_active?: boolean;
+  commission_rate?: number;
+}): Promise<AdminUser> => {
+  const response = await fetch(`${API_URL}/api/platform/admin/users`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeader(),
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new Error(error.detail || "Failed to create user");
+  }
+
+  return response.json();
+};
+
+/**
+ * Admin: Delete user
+ */
+export const deleteUser = async (userId: string): Promise<{
+  success: boolean;
+  message: string;
+}> => {
+  const response = await fetch(`${API_URL}/api/platform/admin/users/${userId}`, {
+    method: "DELETE",
+    headers: {
+      ...getAuthHeader(),
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new Error(error.detail || "Failed to delete user");
+  }
+
+  return response.json();
+};
+
+/**
+ * Admin: Get platform statistics
+ */
+export interface PlatformStatistics {
+  users: {
+    total: number;
+    by_role: Record<string, number>;
+    active: number;
+    approved_qaris: number;
+    pending_qaris: number;
+    new_users_7d: number;
+    new_users_30d: number;
+    growth: Array<{ date: string; count: number }>;
+  };
+  sessions: {
+    total: number;
+    authenticated: number;
+    public: number;
+    by_role: Record<string, number>;
+    recent_7d: number;
+    activity: Array<{ date: string; count: number }>;
+  };
+  analyses: {
+    total: number;
+    average_score: number;
+  };
+  progress: {
+    total_records: number;
+    students_with_progress: number;
+  };
+  relationships: {
+    total: number;
+    active: number;
+  };
+  content: {
+    total_references: number;
+    public_references: number;
+    qari_content: number;
+    top_references: Array<{ id: string; title: string; usage_count: number }>;
+  };
+  recent_activity: Array<{
+    session_id: string;
+    user_email?: string;
+    is_public: boolean;
+    reference_id?: string;
+    score?: number;
+    duration?: number;
+    created_at?: string;
+  }>;
+}
+
+export const getPlatformStatistics = async (): Promise<PlatformStatistics> => {
+  const response = await fetch(`${API_URL}/api/platform/admin/statistics`, {
+    headers: {
+      ...getAuthHeader(),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to get platform statistics");
+  }
+
+  return response.json();
+};
+
+/**
+ * Admin: Get detailed users with activity stats
+ */
+export interface DetailedUser extends AdminUser {
+  session_count?: number;
+  analysis_count?: number;
+  student_count?: number; // For Qari
+  content_count?: number; // For Qari
+  progress_count?: number; // For Student
+  assigned_qari?: string; // For Student
+  average_score?: number; // For Student
+}
+
+export const getDetailedUsers = async (): Promise<{
+  users: DetailedUser[];
+  count: number;
+}> => {
+  const response = await fetch(`${API_URL}/api/platform/admin/users/detailed`, {
+    headers: {
+      ...getAuthHeader(),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to get detailed users");
+  }
+
+  return response.json();
+};
+
+/**
+ * Admin: Get all sessions with details
+ */
+export interface DetailedSession {
+  session_id: string;
+  user_id?: string;
+  user_email?: string;
+  user_name?: string;
+  user_role?: string;
+  reference_id?: string;
+  qari_id?: string;
+  qari_name?: string;
+  file_path?: string;
+  duration?: number;
+  file_size?: number;
+  is_public_demo: boolean;
+  created_at?: string;
+  score?: number;
+  verse_scores?: any;
+  weak_verses?: any;
+  has_analysis: boolean;
+}
+
+export const getAllSessions = async (
+  limit: number = 100,
+  offset: number = 0,
+  userId?: string
+): Promise<{
+  sessions: DetailedSession[];
+  total: number;
+  limit: number;
+  offset: number;
+}> => {
+  const url = userId
+    ? `${API_URL}/api/platform/admin/sessions?limit=${limit}&offset=${offset}&user_id=${userId}`
+    : `${API_URL}/api/platform/admin/sessions?limit=${limit}&offset=${offset}`;
+  
+  const response = await fetch(url, {
+    headers: {
+      ...getAuthHeader(),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to get sessions");
+  }
+
+  return response.json();
+};
+
+/**
+ * Admin: Get usage metrics
+ */
+export interface UsageMetrics {
+  active_students: {
+    today: number;
+    this_week: number;
+  };
+  recordings: {
+    today: number;
+    this_week: number;
+    total: number;
+  };
+  assessments: {
+    today: number;
+    this_week: number;
+    total: number;
+  };
+  most_active_qari: {
+    id?: string;
+    name?: string;
+    email?: string;
+    session_count: number;
+  };
+  storage: {
+    total_mb: number;
+    total_gb: number;
+    by_qari: Record<string, { qari_name: string; estimated_mb: number }>;
+  };
+}
+
+export const getUsageMetrics = async (): Promise<UsageMetrics> => {
+  const response = await fetch(`${API_URL}/api/platform/admin/usage-metrics`, {
+    headers: {
+      ...getAuthHeader(),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to get usage metrics");
+  }
+
+  return response.json();
+};
