@@ -157,6 +157,68 @@ export const getQariStudents = async (): Promise<{
 };
 
 /**
+ * Qari: Get detailed information about a specific student
+ */
+export interface StudentDetails {
+  student: {
+    id: string;
+    email: string;
+    full_name?: string;
+    joined_at?: string;
+    last_active?: string;
+  };
+  statistics: StudentStatistics;
+  progress: StudentProgress[];
+  recordings: Array<{
+    session_id: string;
+    reference?: {
+      id: string;
+      title: string;
+      maqam?: string;
+      filename?: string;
+    };
+    file_path?: string;
+    duration?: number;
+    file_size?: number;
+    created_at?: string;
+    score?: number;
+    analysis?: {
+      score?: number;
+      segments?: any[];
+      pitch_data?: any;
+      regions?: any;
+      ayat_timing?: any;
+      feedback?: any;
+      score_breakdown?: any;
+      pronunciation_alerts?: any;
+    };
+    progress?: {
+      overall_score: number;
+      improvement?: number;
+      verse_scores?: any[];
+      weakest_verses?: any[];
+    };
+  }>;
+  total_recordings: number;
+  total_progress_records: number;
+}
+
+export const getStudentDetails = async (studentId: string): Promise<StudentDetails> => {
+  const response = await fetch(`${API_URL}/api/platform/qari/students/${studentId}`, {
+    headers: {
+      ...getAuthHeader(),
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new Error(error.detail || "Failed to get student details");
+  }
+
+  return response.json();
+};
+
+/**
  * Student: Assign to a Qari
  */
 export const assignToQari = async (qariId: string, referralCode?: string): Promise<{

@@ -2,9 +2,9 @@
  * Qari Dashboard - View students, scores, and progress.
  */
 import React, { useEffect, useState } from "react";
-import { getQariStudents, getQariContent, getQariCommissionStats } from "../services/platformService";
+import { getQariStudents, getQariContent, getQariCommissionStats, getStudentDetails, StudentDetails } from "../services/platformService";
 import { StudentInfo, QariContent } from "../services/platformService";
-import { Users, TrendingUp, TrendingDown, BookOpen, BarChart3, DollarSign, Copy, Check } from "lucide-react";
+import { Users, TrendingUp, TrendingDown, BookOpen, BarChart3, DollarSign, Copy, Check, X, Play, FileAudio } from "lucide-react";
 
 const QariDashboard: React.FC = () => {
   const [students, setStudents] = useState<StudentInfo[]>([]);
@@ -18,6 +18,9 @@ const QariDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [studentDetails, setStudentDetails] = useState<StudentDetails | null>(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
 
   useEffect(() => {
     loadDashboard();
@@ -49,6 +52,24 @@ const QariDashboard: React.FC = () => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
+  };
+
+  const handleStudentClick = async (studentId: string) => {
+    setSelectedStudentId(studentId);
+    setLoadingDetails(true);
+    try {
+      const details = await getStudentDetails(studentId);
+      setStudentDetails(details);
+    } catch (err: any) {
+      setError(err.message || "Failed to load student details");
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
+  const closeStudentDetails = () => {
+    setSelectedStudentId(null);
+    setStudentDetails(null);
   };
 
   if (loading) {
@@ -195,7 +216,8 @@ const QariDashboard: React.FC = () => {
             {students.map((student) => (
               <div
                 key={student.student_id}
-                className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                onClick={() => handleStudentClick(student.student_id)}
+                className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors cursor-pointer"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
@@ -310,6 +332,235 @@ const QariDashboard: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Student Details Modal */}
+      {selectedStudentId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-2xl font-bold text-gray-800">
+                {studentDetails ? (
+                  `${studentDetails.student.full_name || studentDetails.student.email}'s Details`
+                ) : (
+                  "Student Details"
+                )}
+              </h2>
+              <button
+                onClick={closeStudentDetails}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {loadingDetails ? (
+                <div className="flex items-center justify-center py-16">
+                  <div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : studentDetails ? (
+                <div className="space-y-6">
+                  {/* Student Info */}
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h3 className="font-semibold text-gray-800 mb-2">Student Information</h3>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-600">Email:</span>{" "}
+                        <span className="text-gray-800">{studentDetails.student.email}</span>
+                      </div>
+                      {studentDetails.student.full_name && (
+                        <div>
+                          <span className="text-gray-600">Name:</span>{" "}
+                          <span className="text-gray-800">{studentDetails.student.full_name}</span>
+                        </div>
+                      )}
+                      {studentDetails.student.joined_at && (
+                        <div>
+                          <span className="text-gray-600">Joined:</span>{" "}
+                          <span className="text-gray-800">
+                            {new Date(studentDetails.student.joined_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                      )}
+                      {studentDetails.student.last_active && (
+                        <div>
+                          <span className="text-gray-600">Last Active:</span>{" "}
+                          <span className="text-gray-800">
+                            {new Date(studentDetails.student.last_active).toLocaleDateString()}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Statistics */}
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h3 className="font-semibold text-gray-800 mb-3">Statistics</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-600">Total Sessions</p>
+                        <p className="text-2xl font-bold text-gray-800">
+                          {studentDetails.statistics.total_sessions}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Average Score</p>
+                        <p className="text-2xl font-bold text-gray-800">
+                          {Math.round(studentDetails.statistics.average_score)}%
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Best Score</p>
+                        <p className="text-2xl font-bold text-gray-800">
+                          {Math.round(studentDetails.statistics.best_score)}%
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Latest Score</p>
+                        <p className="text-2xl font-bold text-gray-800">
+                          {Math.round(studentDetails.statistics.latest_score)}%
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Recordings */}
+                  <div>
+                    <h3 className="font-semibold text-gray-800 mb-3">
+                      Recordings ({studentDetails.total_recordings})
+                    </h3>
+                    {studentDetails.recordings.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
+                        <FileAudio className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                        <p>No recordings yet</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {studentDetails.recordings.map((recording) => (
+                          <div
+                            key={recording.session_id}
+                            className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <FileAudio className="w-5 h-5 text-blue-500" />
+                                  <h4 className="font-semibold text-gray-800">
+                                    {recording.reference?.title || "Untitled Recording"}
+                                  </h4>
+                                </div>
+                                {recording.reference && (
+                                  <p className="text-sm text-gray-600 mb-2">
+                                    {recording.reference.maqam && (
+                                      <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs mr-2">
+                                        {recording.reference.maqam}
+                                      </span>
+                                    )}
+                                  </p>
+                                )}
+                                <div className="flex items-center gap-4 text-sm text-gray-600">
+                                  {recording.created_at && (
+                                    <span>
+                                      {new Date(recording.created_at).toLocaleString()}
+                                    </span>
+                                  )}
+                                  {recording.duration && (
+                                    <span>Duration: {Math.round(recording.duration)}s</span>
+                                  )}
+                                  {recording.score !== undefined && (
+                                    <span className="font-semibold text-gray-800">
+                                      Score: {Math.round(recording.score)}%
+                                    </span>
+                                  )}
+                                </div>
+                                {recording.progress?.verse_scores && (
+                                  <div className="mt-2 pt-2 border-t border-gray-200">
+                                    <p className="text-xs text-gray-600 mb-1">Verse Scores:</p>
+                                    <div className="flex flex-wrap gap-2">
+                                      {recording.progress.verse_scores.slice(0, 5).map((verse: any, idx: number) => (
+                                        <span
+                                          key={idx}
+                                          className="text-xs bg-blue-50 text-blue-800 px-2 py-1 rounded"
+                                          title={verse.text || `Score: ${verse.score}`}
+                                        >
+                                          {verse.score !== undefined ? `${Math.round(verse.score)}%` : "N/A"}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Progress History */}
+                  <div>
+                    <h3 className="font-semibold text-gray-800 mb-3">
+                      Progress History ({studentDetails.total_progress_records})
+                    </h3>
+                    {studentDetails.progress.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
+                        <BarChart3 className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                        <p>No progress records yet</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {studentDetails.progress.slice(0, 20).map((progress) => (
+                          <div
+                            key={progress.id}
+                            className="border border-gray-200 rounded-lg p-3 flex items-center justify-between"
+                          >
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-gray-800">
+                                  {Math.round(progress.overall_score)}%
+                                </span>
+                                {progress.improvement !== undefined && progress.improvement !== null && (
+                                  <span
+                                    className={`text-sm flex items-center gap-1 ${
+                                      progress.improvement > 0
+                                        ? "text-green-600"
+                                        : progress.improvement < 0
+                                        ? "text-red-600"
+                                        : "text-gray-600"
+                                    }`}
+                                  >
+                                    {progress.improvement > 0 ? (
+                                      <TrendingUp className="w-4 h-4" />
+                                    ) : progress.improvement < 0 ? (
+                                      <TrendingDown className="w-4 h-4" />
+                                    ) : null}
+                                    {progress.improvement > 0 ? "+" : ""}
+                                    {progress.improvement.toFixed(1)}%
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-600 mt-1">
+                                {progress.created_at &&
+                                  new Date(progress.created_at).toLocaleString()}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-16 text-gray-500">
+                  <p>Failed to load student details</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
