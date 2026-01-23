@@ -94,13 +94,14 @@ class ReferenceLibraryService {
 
       // Start upload
       xhr.open('POST', `${API_BASE_URL}/api/references/upload`);
-      
+
       // Add authentication header
       const authHeader = getAuthHeader();
       if (authHeader.Authorization) {
         xhr.setRequestHeader('Authorization', authHeader.Authorization);
       }
-      
+
+
       xhr.send(formData);
     });
   }
@@ -200,7 +201,7 @@ class ReferenceLibraryService {
     try {
       const cached = localStorage.getItem('referenceLibrary');
       const timestamp = localStorage.getItem('referenceLibraryTimestamp');
-      
+
       // Cache valid for 1 hour
       if (cached && timestamp) {
         const age = Date.now() - parseInt(timestamp, 10);
@@ -355,4 +356,3 @@ class ReferenceLibraryService {
 }
 
 export const referenceLibraryService = new ReferenceLibraryService();
-
