@@ -110,7 +110,7 @@ export const analyzeRecitation = async (
     // Use environment variable or default to production backend URL
     // Vite requires VITE_ prefix, but also support REACT_APP_ for compatibility
     const API_URL =
-      import.meta.env.VITE_API_URL || "http://65.108.141.170:8000";
+      import.meta.env.VITE_API_URL || "http://localhost:8000";
     console.log(API_URL);
     const response = await fetch(`${API_URL}/score`, {
       method: "POST",
@@ -275,7 +275,7 @@ export const extractReferencePitch = async (
   referenceId?: string
 ): Promise<PitchDataResponse> => {
   // Use environment variable or default to production backend URL
-  const API_URL = import.meta.env.VITE_API_URL || "http://65.108.141.170:8000";
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
   console.log(API_URL);
   
   const formData = new FormData();
