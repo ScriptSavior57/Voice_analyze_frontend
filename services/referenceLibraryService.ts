@@ -159,10 +159,39 @@ class ReferenceLibraryService {
   }
 
   /**
-   * Get reference audio file URL
+   * Get reference audio file URL (for direct use in audio elements)
+   * Note: This URL requires authentication. For audio elements that can't send headers,
+   * use getReferenceAudioBlobUrl() instead.
    */
   getReferenceAudioUrl(refId: string): string {
     return `${API_BASE_URL}/api/references/${refId}/audio`;
+  }
+
+  /**
+   * Get reference audio as a blob URL (for use in audio elements with authentication)
+   * This fetches the audio with auth headers and creates a blob URL that can be used
+   * in <audio> tags or WaveSurfer without authentication issues.
+   */
+  async getReferenceAudioBlobUrl(refId: string): Promise<string> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/references/${refId}/audio`, {
+        headers: {
+          ...getAuthHeader(),
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: response.statusText }));
+        throw new Error(error.detail || `Failed to fetch reference audio: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      return blobUrl;
+    } catch (error: any) {
+      console.error("Error fetching reference audio:", error);
+      throw error;
+    }
   }
 
   /**

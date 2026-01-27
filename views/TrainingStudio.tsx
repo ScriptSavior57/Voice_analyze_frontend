@@ -342,20 +342,36 @@ const TrainingStudio: React.FC = () => {
         // If no reference selected yet and we have library entries, pick first
         if ((!selectedRef || !selectedRef.id || Array.isArray(selectedRef)) && refs.length > 0) {
           const first = refs[0];
-          const url = referenceLibraryService.getReferenceAudioUrl(first.id);
+          // Get authenticated blob URL for audio elements
+          try {
+            const url = await referenceLibraryService.getReferenceAudioBlobUrl(first.id);
 
-          // Set selectedRef with all properties including is_preset and text_segments
-          const selectedRefData = {
-            id: first.id,
-            title: first.title,
-            url,
-            duration: first.duration || 0,
-            maqam: first.maqam || "Library",
-            is_preset: first.is_preset || false,
-            text_segments: first.text_segments || [],
-          };
+            // Set selectedRef with all properties including is_preset and text_segments
+            const selectedRefData = {
+              id: first.id,
+              title: first.title,
+              url,
+              duration: first.duration || 0,
+              maqam: first.maqam || "Library",
+              is_preset: first.is_preset || false,
+              text_segments: first.text_segments || [],
+            };
 
-          setSelectedRef(selectedRefData);
+            setSelectedRef(selectedRefData);
+          } catch (error) {
+            console.error("Failed to load reference audio:", error);
+            // Fallback to regular URL (may not work without auth, but better than nothing)
+            const url = referenceLibraryService.getReferenceAudioUrl(first.id);
+            setSelectedRef({
+              id: first.id,
+              title: first.title,
+              url,
+              duration: first.duration || 0,
+              maqam: first.maqam || "Library",
+              is_preset: first.is_preset || false,
+              text_segments: first.text_segments || [],
+            });
+          }
 
           // Check if this is a preset with text_segments and load them
           if (first.is_preset && first.text_segments && first.text_segments.length > 0) {
@@ -615,7 +631,11 @@ const TrainingStudio: React.FC = () => {
             return;
           }
 
-          const response = await fetch(url);
+          // Fetch with authentication if it's a library reference (not a blob URL)
+          const isBlobUrl = url.startsWith('blob:');
+          const response = await fetch(url, {
+            headers: isBlobUrl ? {} : (await import("../services/authService")).getAuthHeader(),
+          });
           const refBlob = await response.blob();
 
           // Ensure extraction state is true before starting async extraction
@@ -1492,7 +1512,12 @@ const TrainingStudio: React.FC = () => {
             ? uploadedRefUrl
             : selectedRef.url;
         if (urlToFetch) {
-          const response = await fetch(urlToFetch);
+          // Fetch with authentication if it's a library reference (not a blob URL)
+          const isBlobUrl = urlToFetch.startsWith('blob:');
+          const { getAuthHeader } = await import("../services/authService");
+          const response = await fetch(urlToFetch, {
+            headers: isBlobUrl ? {} : getAuthHeader(),
+          });
           refBlob = await response.blob();
         }
       }
@@ -1868,9 +1893,14 @@ const TrainingStudio: React.FC = () => {
       }
 
       // Switch to the newly saved reference from library
-      const libraryUrl = referenceLibraryService.getReferenceAudioUrl(
-        savedReference.id
-      );
+      // Get authenticated blob URL for audio elements
+      let libraryUrl: string;
+      try {
+        libraryUrl = await referenceLibraryService.getReferenceAudioBlobUrl(savedReference.id);
+      } catch (error) {
+        console.error("Failed to load reference audio, using fallback URL:", error);
+        libraryUrl = referenceLibraryService.getReferenceAudioUrl(savedReference.id);
+      }
       setUploadedRefUrl(null); // Clear blob URL since we're using library now
 
       // IMPORTANT: Clear old graph and set extraction state BEFORE setting new selectedRef
@@ -1952,13 +1982,26 @@ const TrainingStudio: React.FC = () => {
                     }));
                     setReferenceLibrary(refs);
                     if (refs.length > 0) {
-                      const url = referenceLibraryService.getReferenceAudioUrl(refs[0].id);
-                      setSelectedRef({
-                        id: refs[0].id,
-                        title: refs[0].title,
-                        url,
-                        ...refs[0],
-                      });
+                      // Get authenticated blob URL for audio elements
+                      try {
+                        const url = await referenceLibraryService.getReferenceAudioBlobUrl(refs[0].id);
+                        setSelectedRef({
+                          id: refs[0].id,
+                          title: refs[0].title,
+                          url,
+                          ...refs[0],
+                        });
+                      } catch (error) {
+                        console.error("Failed to load reference audio:", error);
+                        // Fallback to regular URL
+                        const url = referenceLibraryService.getReferenceAudioUrl(refs[0].id);
+                        setSelectedRef({
+                          id: refs[0].id,
+                          title: refs[0].title,
+                          url,
+                          ...refs[0],
+                        });
+                      }
                     }
                   }
                 } catch (err) {
@@ -1979,7 +2022,14 @@ const TrainingStudio: React.FC = () => {
               const ref = referenceLibrary.find((r) => r.id === id);
               if (!ref) return;
 
-              const url = referenceLibraryService.getReferenceAudioUrl(ref.id);
+              // Get authenticated blob URL for audio elements
+              let url: string;
+              try {
+                url = await referenceLibraryService.getReferenceAudioBlobUrl(ref.id);
+              } catch (error) {
+                console.error("Failed to load reference audio, using fallback URL:", error);
+                url = referenceLibraryService.getReferenceAudioUrl(ref.id);
+              }
 
               setUploadedRefUrl(null);
               setStudentBlob(null);

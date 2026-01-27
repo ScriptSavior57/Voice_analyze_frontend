@@ -112,8 +112,17 @@ export const analyzeRecitation = async (
     const API_URL =
       import.meta.env.VITE_API_URL || "http://localhost:8000";
     console.log(API_URL);
+    
+    // Include authentication header for authenticated users
+    const headers: HeadersInit = {};
+    const authHeader = getAuthHeader();
+    if (authHeader.Authorization) {
+      headers['Authorization'] = authHeader.Authorization;
+    }
+    
     const response = await fetch(`${API_URL}/score`, {
       method: "POST",
+      headers: headers,
       body: formData,
     });
 
