@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Save, X } from 'lucide-react';
 import { getQariContent, updateQariContent, QariContent } from '../services/platformService';
-import { referenceLibraryService } from '../services/referenceLibraryService';
+import { referenceLibraryService, TextSegment } from '../services/referenceLibraryService';
 import TextAlignmentEditor from './TextAlignmentEditor';
 import { extractReferencePitch } from '../services/apiService';
 import { PitchData } from '../types';
@@ -20,6 +20,9 @@ const QariContentEditor: React.FC = () => {
   const [surahName, setSurahName] = useState<string>('');
   const [ayahNumber, setAyahNumber] = useState<string>('');
   const [maqam, setMaqam] = useState<string>('');
+  
+  // Text segments state
+  const [textSegments, setTextSegments] = useState<TextSegment[]>([]);
   
   // Audio and pitch data
   const [referenceAudio, setReferenceAudio] = useState<any>(null);
@@ -65,6 +68,20 @@ const QariContentEditor: React.FC = () => {
       setSurahName(foundContent.surah_name || '');
       setAyahNumber(foundContent.ayah_number?.toString() || '');
       setMaqam(foundContent.maqam || '');
+      
+      // Load existing text segments if available
+      if (foundContent.text_segments && foundContent.text_segments.length > 0) {
+        const segments = foundContent.text_segments.map((seg: any) => ({
+          text: seg.text || '',
+          start: seg.start || 0,
+          end: seg.end || 0,
+        }));
+        // Sort by start time
+        segments.sort((a, b) => (a.start || 0) - (b.start || 0));
+        setTextSegments(segments);
+      } else {
+        setTextSegments([]);
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to load content');
     } finally {
@@ -119,12 +136,18 @@ const QariContentEditor: React.FC = () => {
     }
   };
 
+  const handleSegmentsChange = (segments: TextSegment[]) => {
+    setTextSegments(segments);
+  };
+
   const handleSave = async () => {
-    if (!contentId) return;
+    if (!contentId || !content?.reference_id) return;
     
     try {
       setSaving(true);
       setError(null);
+      
+      // First, save the metadata (surah/ayah/maqam)
       await updateQariContent(
         contentId,
         {
@@ -134,6 +157,31 @@ const QariContentEditor: React.FC = () => {
           maqam: maqam || undefined,
         }
       );
+      
+      // Then, save text segments using the preset endpoint
+      if (textSegments.length > 0) {
+        // Check if reference is already a preset
+        const refs = await referenceLibraryService.getReferences();
+        const ref = refs.find(r => r.id === content.reference_id);
+        
+        if (ref?.is_preset) {
+          // Update existing preset
+          await referenceLibraryService.updatePreset(
+            content.reference_id,
+            textSegments,
+            ref.title || content.reference_title || 'Untitled',
+            maqam || undefined
+          );
+        } else {
+          // Create new preset
+          await referenceLibraryService.createPreset(
+            content.reference_id,
+            content.reference_title || 'Untitled',
+            textSegments,
+            maqam || undefined
+          );
+        }
+      }
       
       // Navigate back to dashboard
       navigate('/dashboard');
@@ -287,8 +335,8 @@ const QariContentEditor: React.FC = () => {
                 audioUrl={audioUrl}
                 duration={referenceAudio.duration || 0}
                 referencePitch={referencePitch}
-                onSegmentsChange={() => {}} // Qari doesn't edit text segments
-                initialSegments={[]}
+                onSegmentsChange={handleSegmentsChange}
+                initialSegments={textSegments}
               />
             )}
           </div>

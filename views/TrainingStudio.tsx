@@ -697,11 +697,13 @@ const TrainingStudio: React.FC = () => {
               start: seg.start || 0,
               end: seg.end || 0,
             })) || []);
-
+          
+          // Sort by 'start' field to ensure proper chronological order
           if (segmentsToRestore.length > 0) {
+            segmentsToRestore.sort((a, b) => (a.start || 0) - (b.start || 0));
             setReferenceAyahTiming(segmentsToRestore);
             console.log(
-              `✅ Reference changed to preset with text (${segmentsToRestore.length} segments) - restored text timing`
+              `✅ Reference changed to preset with text (${segmentsToRestore.length} segments, sorted by start) - restored text timing`
             );
           }
         }
@@ -814,13 +816,15 @@ const TrainingStudio: React.FC = () => {
               start: seg.start || 0,
               end: seg.end || 0,
             })) || []);
-
-          // Always set if segments are available (even if referenceAyahTiming already has data)
-          // This ensures preset text is always loaded when preset is selected
+          
+          // Sort by 'start' field to ensure proper chronological order
           if (segmentsToUse.length > 0) {
+            segmentsToUse.sort((a, b) => (a.start || 0) - (b.start || 0));
+            // Always set if segments are available (even if referenceAyahTiming already has data)
+            // This ensures preset text is always loaded when preset is selected
             setReferenceAyahTiming(segmentsToUse);
             console.log(
-              `✅ Set preset text_segments (${segmentsToUse.length} segments) - overwriting any existing timing`
+              `✅ Set preset text_segments (${segmentsToUse.length} segments, sorted by start) - overwriting any existing timing`
             );
           } else {
             console.log(
@@ -2432,13 +2436,16 @@ const TrainingStudio: React.FC = () => {
                   console.log(`[PresetLoad] Mapped segment:`, result);
                   return result;
                 });
+                
+                // Sort by 'start' field to ensure proper chronological order
+                presetTextSegments.sort((a, b) => (a.start || 0) - (b.start || 0));
 
                 // Store in ref for useEffect to check
                 presetTextSegmentsRef.current = presetTextSegments;
 
                 // Count segments with actual text
                 const segmentsWithText = presetTextSegments.filter((seg: any) => seg.text && seg.text.trim() !== '').length;
-                console.log(`✅ Set preset text segments: ${presetTextSegments.length} total, ${segmentsWithText} with text`, presetTextSegments);
+                console.log(`✅ Set preset text segments: ${presetTextSegments.length} total, ${segmentsWithText} with text (sorted by start)`, presetTextSegments);
 
                 // Set timing - use setTimeout to ensure it runs after useEffect clears it
                 setTimeout(() => {
@@ -2791,7 +2798,7 @@ const TrainingStudio: React.FC = () => {
                       }}
                     />
 
-                    {/* Quranic Text Display - Always show below waveform when text segments are available */}
+                    {/* Quranic Text Display - Always show below waveform when text segments are available (Admin and Qari only) */}
                     {(() => {
                       // Get text segments - prioritize referenceAyahTiming first (where preset segments are stored)
                       let textSegments: any[] = [];
@@ -2799,8 +2806,10 @@ const TrainingStudio: React.FC = () => {
                       // First check referenceAyahTiming (where preset segments get stored by useEffect and initial load)
                       if (referenceAyahTiming && referenceAyahTiming.length > 0) {
                         textSegments = referenceAyahTiming;
+                        // Sort by 'start' field to ensure proper order
+                        textSegments = [...textSegments].sort((a, b) => (a.start || 0) - (b.start || 0));
                         const segmentsWithText = textSegments.filter((seg: any) => seg.text && seg.text.trim() !== '').length;
-                        console.log(`[TextDisplay] Using referenceAyahTiming: ${textSegments.length} total, ${segmentsWithText} with text`);
+                        console.log(`[TextDisplay] Using referenceAyahTiming: ${textSegments.length} total, ${segmentsWithText} with text (sorted by start)`);
                       }
 
                       // Fallback: Check selectedRef.text_segments if referenceAyahTiming is empty
@@ -2813,17 +2822,26 @@ const TrainingStudio: React.FC = () => {
                             end: seg.end || 0,
                           };
                         });
-                        console.log(`[TextDisplay] Using selectedRef.text_segments as fallback (${textSegments.length} segments)`);
+                        // Sort by 'start' field to ensure proper order
+                        textSegments = [...textSegments].sort((a, b) => (a.start || 0) - (b.start || 0));
+                        console.log(`[TextDisplay] Using selectedRef.text_segments as fallback (${textSegments.length} segments, sorted by start)`);
                       }
 
-                      const shouldShow = textSegments.length > 0 && referenceDuration > 0;
+                      // Filter to only count segments with actual text content
+                      const segmentsWithText = textSegments.filter((seg: any) => seg.text && seg.text.trim() !== '');
+                      
+                      // Only show if there are segments with actual text content
+                      const shouldShow = segmentsWithText.length > 0 && referenceDuration > 0;
+                      // Show for Admin, Qari, AND Student roles (students can see their Qari's text segments)
+                      const userRole = user?.role;
+                      const shouldShowForRole = shouldShow && (userRole === 'admin' || userRole === 'qari' || userRole === 'student');
 
-                      console.log(`[TextDisplay] Final check: textSegments.length=${textSegments.length}, referenceDuration=${referenceDuration}, shouldShow=${shouldShow}`);
+                      console.log(`[TextDisplay] Final check: textSegments.length=${textSegments.length}, segmentsWithText.length=${segmentsWithText.length}, referenceDuration=${referenceDuration}, shouldShow=${shouldShow}, userRole=${userRole}, shouldShowForRole=${shouldShowForRole}`);
 
-                      return shouldShow ? (
+                      return shouldShowForRole ? (
                         <div className='mt-4'>
                           <AyahTextDisplay
-                            ayatTiming={textSegments}
+                            ayatTiming={segmentsWithText.length > 0 ? segmentsWithText : textSegments}
                             currentTime={
                               isPracticeMode
                                 ? practiceTime

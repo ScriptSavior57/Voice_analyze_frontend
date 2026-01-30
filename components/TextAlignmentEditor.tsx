@@ -21,7 +21,11 @@ const TextAlignmentEditor: React.FC<TextAlignmentEditorProps> = ({
   onSegmentsChange,
   initialSegments = [],
 }) => {
-  const [segments, setSegments] = useState<TextSegment[]>(initialSegments);
+  // Initialize segments and sort by start time (ascending - smallest first)
+  const [segments, setSegments] = useState<TextSegment[]>(() => {
+    const sorted = [...initialSegments].sort((a, b) => (a.start || 0) - (b.start || 0));
+    return sorted;
+  });
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -41,10 +45,38 @@ const TextAlignmentEditor: React.FC<TextAlignmentEditorProps> = ({
   const textInputRef = useRef<HTMLTextAreaElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const waveformRef = useRef<any>(null);
+  const onSegmentsChangeRef = useRef(onSegmentsChange);
+  const prevInitialSegmentsRef = useRef<string>('');
 
+  // Keep the callback ref up to date
   useEffect(() => {
-    onSegmentsChange(segments);
-  }, [segments, onSegmentsChange]);
+    onSegmentsChangeRef.current = onSegmentsChange;
+  }, [onSegmentsChange]);
+
+  // Update segments when initialSegments actually change (deep comparison)
+  useEffect(() => {
+    // Stringify to compare actual content, not reference
+    // Handle null/undefined explicitly
+    const safeInitialSegments = initialSegments || [];
+    const currentInitialStr = JSON.stringify(safeInitialSegments);
+    
+    // Only update if the content actually changed
+    if (currentInitialStr !== prevInitialSegmentsRef.current) {
+      prevInitialSegmentsRef.current = currentInitialStr;
+      
+      if (safeInitialSegments.length > 0) {
+        const sorted = [...safeInitialSegments].sort((a, b) => (a.start || 0) - (b.start || 0));
+        setSegments(sorted);
+      } else {
+        setSegments([]);
+      }
+    }
+  }, [initialSegments]);
+
+  // Call onSegmentsChange only when segments actually change (not when callback reference changes)
+  useEffect(() => {
+    onSegmentsChangeRef.current(segments);
+  }, [segments]);
 
   // Focus text input when modal opens
   useEffect(() => {
@@ -155,7 +187,8 @@ const TextAlignmentEditor: React.FC<TextAlignmentEditorProps> = ({
 
   const addSegment = (text: string, start: number, end: number) => {
     const newSegment: TextSegment = { text, start, end };
-    const updated = [...segments, newSegment].sort((a, b) => a.start - b.start);
+    // Sort by start time (ascending - smallest first)
+    const updated = [...segments, newSegment].sort((a, b) => (a.start || 0) - (b.start || 0));
     setSegments(updated);
   };
 
@@ -173,7 +206,9 @@ const TextAlignmentEditor: React.FC<TextAlignmentEditorProps> = ({
     if (editingIndex !== null) {
       const updated = [...segments];
       updated[editingIndex] = { ...updated[editingIndex], text: editText };
-      setSegments(updated);
+      // Sort by start time (ascending - smallest first)
+      const sorted = updated.sort((a, b) => (a.start || 0) - (b.start || 0));
+      setSegments(sorted);
       setEditingIndex(null);
       setEditText('');
     }
@@ -284,7 +319,7 @@ const TextAlignmentEditor: React.FC<TextAlignmentEditorProps> = ({
           </p>
         ) : (
           <div className="space-y-3">
-            {segments.map((segment, index) => (
+            {[...segments].sort((a, b) => (a.start || 0) - (b.start || 0)).map((segment, index) => (
               <div
                 key={index}
                 className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200"

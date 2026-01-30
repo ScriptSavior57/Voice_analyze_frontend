@@ -20,26 +20,29 @@ const AyahTextDisplay: React.FC<AyahTextDisplayProps> = ({
     return null;
   }
 
+  // Sort segments by 'start' field to ensure chronological order
+  const sortedAyatTiming = [...ayatTiming].sort((a, b) => (a.start || 0) - (b.start || 0));
+
   // Debug: Log segment information
-  if (ayatTiming.length > 0) {
-    const segmentsWithText = ayatTiming.filter(
+  if (sortedAyatTiming.length > 0) {
+    const segmentsWithText = sortedAyatTiming.filter(
       (a) => a.text && a.text.trim()
     ).length;
-    const totalDuration = ayatTiming[ayatTiming.length - 1]?.end || 0;
+    const totalDuration = sortedAyatTiming[sortedAyatTiming.length - 1]?.end || 0;
     console.log(
       `[AyahTextDisplay] Rendering ${
-        ayatTiming.length
+        sortedAyatTiming.length
       } segments (${segmentsWithText} with text, ${
-        ayatTiming.length - segmentsWithText
-      } empty), duration: ${totalDuration.toFixed(2)}s`
+        sortedAyatTiming.length - segmentsWithText
+      } empty), duration: ${totalDuration.toFixed(2)}s (sorted by start)`
     );
-    console.log(`[AyahTextDisplay] All segments:`, ayatTiming);
+    console.log(`[AyahTextDisplay] All segments (sorted):`, sortedAyatTiming);
   } else {
     console.warn(`[AyahTextDisplay] No segments to render!`);
   }
 
   // Find the current active segment
-  const activeSegmentIndex = ayatTiming.findIndex(
+  const activeSegmentIndex = sortedAyatTiming.findIndex(
     (ayah) => currentTime >= ayah.start && currentTime < ayah.end
   );
 
@@ -74,13 +77,12 @@ const AyahTextDisplay: React.FC<AyahTextDisplayProps> = ({
         className='flex flex-wrap gap-2 items-center justify-center'
         role='group'
         aria-labelledby='ayah-text-heading'
-        dir='rtl' // RTL direction for text segments container
+        dir='ltr' // LTR direction for button order (left-to-right, so first segment appears on left)
         style={{
-          direction: "rtl", // Explicit RTL for Arabic text flow
-          unicodeBidi: "bidi-override", // Ensure RTL rendering
+          direction: "ltr", // Explicit LTR for button layout order
         }}
       >
-        {ayatTiming.map((ayah, index) => {
+        {sortedAyatTiming.map((ayah, index) => {
           const isActive = index === activeSegmentIndex;
           const isPast = currentTime >= ayah.end;
           const isFuture = currentTime < ayah.start;
@@ -141,8 +143,8 @@ const AyahTextDisplay: React.FC<AyahTextDisplayProps> = ({
           dir='ltr' // Time display in LTR
         >
           <span className='font-medium'>
-            {ayatTiming[activeSegmentIndex].start.toFixed(1)}s -{" "}
-            {ayatTiming[activeSegmentIndex].end.toFixed(1)}s
+            {sortedAyatTiming[activeSegmentIndex].start.toFixed(1)}s -{" "}
+            {sortedAyatTiming[activeSegmentIndex].end.toFixed(1)}s
           </span>
         </div>
       )}
