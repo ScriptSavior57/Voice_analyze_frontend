@@ -7,6 +7,8 @@ import {
   getAllSessions, DetailedSession, getUsageMetrics, UsageMetrics
 } from '../services/platformService';
 import PresetEditor from '../components/PresetEditor';
+import ConfirmModal from '../components/ConfirmModal';
+import AlertModal from '../components/AlertModal';
 
 type TabType = 'presets' | 'users' | 'monitoring';
 
@@ -56,6 +58,23 @@ const AdminMode: React.FC<AdminModeProps> = ({ view = 'presets' }) => {
   const [usageMetrics, setUsageMetrics] = useState<UsageMetrics | null>(null);
   const [metricsLoading, setMetricsLoading] = useState(false);
   const [monitoringView, setMonitoringView] = useState<'overview' | 'users' | 'sessions' | 'usage'>('overview');
+  
+  // Modal states
+  const [deletePresetConfirm, setDeletePresetConfirm] = useState<{ isOpen: boolean; presetId: string }>({
+    isOpen: false,
+    presetId: '',
+  });
+  const [deleteUserConfirm, setDeleteUserConfirm] = useState<{ isOpen: boolean; userId: string; userEmail: string }>({
+    isOpen: false,
+    userId: '',
+    userEmail: '',
+  });
+  const [alertModal, setAlertModal] = useState<{ isOpen: boolean; title: string; message: string; variant: 'success' | 'error' | 'warning' | 'info' }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    variant: 'info',
+  });
 
   useEffect(() => {
     if (activeTab === 'presets') {
@@ -82,7 +101,7 @@ const AdminMode: React.FC<AdminModeProps> = ({ view = 'presets' }) => {
       setStatistics(data);
     } catch (error: any) {
       console.error('Failed to load statistics:', error);
-      alert('Failed to load platform statistics. Please try again.');
+      setAlertModal({ isOpen: true, title: 'Error', message: 'Failed to load platform statistics. Please try again.', variant: 'error' });
     } finally {
       setStatsLoading(false);
     }
@@ -95,7 +114,7 @@ const AdminMode: React.FC<AdminModeProps> = ({ view = 'presets' }) => {
       setDetailedUsers(data.users);
     } catch (error: any) {
       console.error('Failed to load detailed users:', error);
-      alert('Failed to load user details. Please try again.');
+      setAlertModal({ isOpen: true, title: 'Error', message: 'Failed to load user details. Please try again.', variant: 'error' });
     } finally {
       setUsersLoading(false);
     }
@@ -108,7 +127,7 @@ const AdminMode: React.FC<AdminModeProps> = ({ view = 'presets' }) => {
       setSessions(data.sessions);
     } catch (error: any) {
       console.error('Failed to load sessions:', error);
-      alert('Failed to load sessions. Please try again.');
+      setAlertModal({ isOpen: true, title: 'Error', message: 'Failed to load sessions. Please try again.', variant: 'error' });
     } finally {
       setSessionsLoading(false);
     }
@@ -121,7 +140,7 @@ const AdminMode: React.FC<AdminModeProps> = ({ view = 'presets' }) => {
       setUsageMetrics(data);
     } catch (error: any) {
       console.error('Failed to load usage metrics:', error);
-      alert('Failed to load usage metrics. Please try again.');
+      setAlertModal({ isOpen: true, title: 'Error', message: 'Failed to load usage metrics. Please try again.', variant: 'error' });
     } finally {
       setMetricsLoading(false);
     }
@@ -165,7 +184,7 @@ const AdminMode: React.FC<AdminModeProps> = ({ view = 'presets' }) => {
       setUsers(data.users);
     } catch (error: any) {
       console.error('Failed to load users:', error);
-      alert('Failed to load users. Please try again.');
+      setAlertModal({ isOpen: true, title: 'Error', message: 'Failed to load users. Please try again.', variant: 'error' });
     } finally {
       setUserLoading(false);
     }
@@ -183,17 +202,19 @@ const AdminMode: React.FC<AdminModeProps> = ({ view = 'presets' }) => {
     setSelectedReference(preset);
   };
 
-  const handleDelete = async (presetId: string) => {
-    if (!confirm('Are you sure you want to delete this preset? It will be converted back to a regular reference.')) {
-      return;
-    }
+  const handleDelete = (presetId: string) => {
+    setDeletePresetConfirm({ isOpen: true, presetId });
+  };
 
+  const confirmDeletePreset = async () => {
     try {
-      await referenceLibraryService.deletePreset(presetId);
+      await referenceLibraryService.deletePreset(deletePresetConfirm.presetId);
       await loadPresetData();
+      setDeletePresetConfirm({ isOpen: false, presetId: '' });
     } catch (error) {
       console.error('Failed to delete preset:', error);
-      alert('Failed to delete preset. Please try again.');
+      setAlertModal({ isOpen: true, title: 'Error', message: 'Failed to delete preset. Please try again.', variant: 'error' });
+      setDeletePresetConfirm({ isOpen: false, presetId: '' });
     }
   };
 
@@ -225,7 +246,7 @@ const AdminMode: React.FC<AdminModeProps> = ({ view = 'presets' }) => {
       setSelectedReference(null);
     } catch (error) {
       console.error('Failed to save preset:', error);
-      alert('Failed to save preset. Please try again.');
+      setAlertModal({ isOpen: true, title: 'Error', message: 'Failed to save preset. Please try again.', variant: 'error' });
       throw error;
     }
   };
@@ -242,7 +263,7 @@ const AdminMode: React.FC<AdminModeProps> = ({ view = 'presets' }) => {
       await approveQari(userId);
       await loadUserData();
     } catch (error: any) {
-      alert(error.message || 'Failed to approve Qari');
+      setAlertModal({ isOpen: true, title: 'Error', message: error.message || 'Failed to approve Qari', variant: 'error' });
     }
   };
 
@@ -288,7 +309,7 @@ const AdminMode: React.FC<AdminModeProps> = ({ view = 'presets' }) => {
       } else {
         // Create new user
         if (!userFormData.email || !userFormData.password) {
-          alert('Email and password are required');
+          setAlertModal({ isOpen: true, title: 'Validation Error', message: 'Email and password are required', variant: 'warning' });
           return;
         }
         await createUser({
@@ -305,20 +326,22 @@ const AdminMode: React.FC<AdminModeProps> = ({ view = 'presets' }) => {
       setEditingUser(null);
       setCreatingUser(false);
     } catch (error: any) {
-      alert(error.message || 'Failed to save user');
+      setAlertModal({ isOpen: true, title: 'Error', message: error.message || 'Failed to save user', variant: 'error' });
     }
   };
 
-  const handleDeleteUser = async (userId: string, userEmail: string) => {
-    if (!confirm(`Are you sure you want to delete user ${userEmail}? This action cannot be undone.`)) {
-      return;
-    }
+  const handleDeleteUser = (userId: string, userEmail: string) => {
+    setDeleteUserConfirm({ isOpen: true, userId, userEmail });
+  };
 
+  const confirmDeleteUser = async () => {
     try {
-      await deleteUser(userId);
+      await deleteUser(deleteUserConfirm.userId);
       await loadUserData();
+      setDeleteUserConfirm({ isOpen: false, userId: '', userEmail: '' });
     } catch (error: any) {
-      alert(error.message || 'Failed to delete user');
+      setAlertModal({ isOpen: true, title: 'Error', message: error.message || 'Failed to delete user', variant: 'error' });
+      setDeleteUserConfirm({ isOpen: false, userId: '', userEmail: '' });
     }
   };
 
@@ -1193,9 +1216,20 @@ const AdminMode: React.FC<AdminModeProps> = ({ view = 'presets' }) => {
                             <td className="px-4 py-3 whitespace-nowrap">
                               {session.file_path && (
                                 <button
-                                  onClick={() => {
-                                    const url = `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/references/${session.session_id}/audio`;
-                                    window.open(url, '_blank');
+                                  onClick={async () => {
+                                    try {
+                                      // Get authenticated blob URL
+                                      const blobUrl = await referenceLibraryService.getReferenceAudioBlobUrl(session.session_id);
+                                      // Create a temporary link to download/play the audio
+                                      const link = document.createElement('a');
+                                      link.href = blobUrl;
+                                      link.target = '_blank';
+                                      link.click();
+                                      // Note: blob URL will be cleaned up by browser when tab closes
+                                    } catch (error) {
+                                      console.error('Failed to load audio:', error);
+                                      setAlertModal({ isOpen: true, title: 'Error', message: 'Failed to load audio. Please try again.', variant: 'error' });
+                                    }
                                   }}
                                   className="text-blue-600 hover:text-blue-900 text-sm font-medium"
                                   title="View audio"
@@ -1385,6 +1419,39 @@ const AdminMode: React.FC<AdminModeProps> = ({ view = 'presets' }) => {
           )}
         </>
       )}
+
+      {/* Delete Preset Confirmation Modal */}
+      <ConfirmModal
+        isOpen={deletePresetConfirm.isOpen}
+        title="Delete Preset"
+        message="Are you sure you want to delete this preset? It will be converted back to a regular reference."
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        onConfirm={confirmDeletePreset}
+        onCancel={() => setDeletePresetConfirm({ isOpen: false, presetId: '' })}
+      />
+
+      {/* Delete User Confirmation Modal */}
+      <ConfirmModal
+        isOpen={deleteUserConfirm.isOpen}
+        title="Delete User"
+        message={`Are you sure you want to delete user ${deleteUserConfirm.userEmail}? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        onConfirm={confirmDeleteUser}
+        onCancel={() => setDeleteUserConfirm({ isOpen: false, userId: '', userEmail: '' })}
+      />
+
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alertModal.isOpen}
+        title={alertModal.title}
+        message={alertModal.message}
+        variant={alertModal.variant}
+        onClose={() => setAlertModal({ isOpen: false, title: '', message: '', variant: 'info' })}
+      />
     </div>
   );
 };

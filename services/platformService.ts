@@ -20,6 +20,7 @@ export interface QariContent {
   file_path?: string;
   duration?: number;
   upload_date?: string;
+  text_segments?: Array<{ text: string; start: number; end: number }>;
 }
 
 export interface StudentInfo {
@@ -164,6 +165,27 @@ export const updateQariContent = async (
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: response.statusText }));
     throw new Error(error.detail || "Failed to update content");
+  }
+
+  return response.json();
+};
+
+/**
+ * Qari: Delete/remove content from library
+ */
+export const deleteQariContent = async (
+  contentId: string
+): Promise<{ success: boolean; message: string }> => {
+  const response = await fetch(`${API_URL}/api/platform/qari/content/${contentId}`, {
+    method: "DELETE",
+    headers: {
+      ...getAuthHeader(),
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new Error(error.detail || "Failed to delete Qari content");
   }
 
   return response.json();

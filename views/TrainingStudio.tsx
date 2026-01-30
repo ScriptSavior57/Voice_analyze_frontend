@@ -12,6 +12,7 @@ import AyahTextDisplay from "../components/AyahTextDisplay";
 import PronunciationAlerts from "../components/PronunciationAlerts";
 import ReferenceLibrary from "../components/ReferenceLibrary";
 import QariSelector from "../components/QariSelector";
+import AlertModal from "../components/AlertModal";
 import {
   analyzeRecitation,
   extractReferencePitch,
@@ -180,6 +181,12 @@ const TrainingStudio: React.FC = () => {
   const [referenceLibraryError, setReferenceLibraryError] = useState<
     string | null
   >(null);
+  const [alertModal, setAlertModal] = useState<{ isOpen: boolean; title: string; message: string; variant: 'success' | 'error' | 'warning' | 'info' }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    variant: 'info',
+  });
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -337,6 +344,7 @@ const TrainingStudio: React.FC = () => {
                 created_at: r.created_at 
               })));
               
+              // Backend already sorts by upload_date (latest first), but we'll re-sort here to ensure correctness
               // Sort by upload_date FIRST (actual file upload date), then created_at as fallback
               // This ensures the latest uploaded file appears first, not when it was added to Qari's library
               refs = mappedRefs.sort((a: any, b: any) => {
@@ -347,6 +355,16 @@ const TrainingStudio: React.FC = () => {
                 const dateB = b.upload_date 
                   ? new Date(b.upload_date).getTime() 
                   : (b.created_at ? new Date(b.created_at).getTime() : 0);
+                
+                // Debug: Log comparison for first few items
+                if (mappedRefs.indexOf(a) < 3 && mappedRefs.indexOf(b) < 3) {
+                  console.log(`[Student Load] Sorting comparison:`, {
+                    a: { id: a.id, filename: a.filename, upload_date: a.upload_date, dateA },
+                    b: { id: b.id, filename: b.filename, upload_date: b.upload_date, dateB },
+                    result: dateB - dateA
+                  });
+                }
+                
                 return dateB - dateA; // Descending order (newest first)
               });
               
@@ -354,7 +372,8 @@ const TrainingStudio: React.FC = () => {
                 id: r.id, 
                 filename: r.filename, 
                 upload_date: r.upload_date,
-                created_at: r.created_at 
+                created_at: r.created_at,
+                upload_date_ms: r.upload_date ? new Date(r.upload_date).getTime() : 0
               })));
             } else if (contentData.message && contentData.message.includes("No Qari assigned")) {
               // Only show error if message explicitly says "No Qari assigned"
@@ -394,13 +413,12 @@ const TrainingStudio: React.FC = () => {
           ? refs.length > 0  // Always select latest for Admin/Qari/Student
           : ((!selectedRef || !selectedRef.id || Array.isArray(selectedRef)) && refs.length > 0);  // Only if not selected for public users
         
-        if (shouldAutoSelect) {
+        if (shouldAutoSelect && refs.length > 0) {
           const first = refs[0]; // This is the latest uploaded file (sorted by upload_date)
-              console.log(`[${userRole} Load] Auto-selecting latest file:`, first.id, first.title, "created_at:", first.created_at);
+          console.log(`[${userRole} Load] Auto-selecting latest file:`, first.id, first.filename || first.title, "upload_date:", first.upload_date);
           
-          // For students, always update to latest file (even if same ID, to ensure fresh data)
-          // For others, only update if it's different from current selection
-          // Note: selectedRef might be null or array (legacy), so we check for that too
+          // For students, ALWAYS update to latest file (even if same ID, to ensure fresh data)
+          // This ensures that on refresh or Qari change, the latest file is always selected
           const isSelectedRefEmpty = !selectedRef || Array.isArray(selectedRef) || !selectedRef.id;
           const shouldUpdate = (userRole === 'student') 
             ? true  // Always update for students to ensure latest file is loaded
@@ -413,31 +431,46 @@ const TrainingStudio: React.FC = () => {
               const url = await referenceLibraryService.getReferenceAudioBlobUrl(first.id);
               console.log(`[${userRole} Load] Got blob URL for reference:`, first.id);
 
-              // Set selectedRef with all properties including is_preset and text_segments
-              const selectedRefData = {
-                id: first.id,
-                title: first.title,
-                url,
-                duration: first.duration || 0,
-                maqam: first.maqam || "Library",
-                is_preset: first.is_preset || false,
-                text_segments: first.text_segments || [],
-              };
-
-              setSelectedRef(selectedRefData);
-            } catch (error) {
-              console.error("Failed to load reference audio:", error);
-              // Fallback to regular URL (may not work without auth, but better than nothing)
-              const url = referenceLibraryService.getReferenceAudioUrl(first.id);
+              // Set selectedRef with all properties including filename and upload_date
               setSelectedRef({
                 id: first.id,
                 title: first.title,
+                filename: first.filename,
                 url,
                 duration: first.duration || 0,
                 maqam: first.maqam || "Library",
                 is_preset: first.is_preset || false,
                 text_segments: first.text_segments || [],
+                upload_date: first.upload_date,
+                ...first, // Include all other properties
               });
+              
+              console.log(`[${userRole} Load] Selected reference updated to latest file`);
+            } catch (error) {
+              console.error("Failed to load reference audio:", error);
+              // Set selectedRef without URL - will retry
+              setSelectedRef({
+                id: first.id,
+                title: first.title,
+                filename: first.filename,
+                url: "", // Empty URL - will need to retry
+                duration: first.duration || 0,
+                maqam: first.maqam || "Library",
+                is_preset: first.is_preset || false,
+                text_segments: first.text_segments || [],
+                upload_date: first.upload_date,
+                ...first,
+              });
+              // Retry getting blob URL after a short delay
+              setTimeout(async () => {
+                try {
+                  const retryUrl = await referenceLibraryService.getReferenceAudioBlobUrl(first.id);
+                  setSelectedRef((prev: any) => prev ? { ...prev, url: retryUrl } : prev);
+                } catch (retryError) {
+                  console.error("Retry failed:", retryError);
+                  setReferenceLibraryError("Failed to load reference audio. Please try again.");
+                }
+              }, 1000);
             }
 
             // Check if this is a preset with text_segments and load them
@@ -473,6 +506,9 @@ const TrainingStudio: React.FC = () => {
               console.log(`[InitialLoad] Reference "${first.title}" is not a preset or has no text segments`);
             }
           }
+        } else if (refs.length === 0 && userRole === 'student') {
+          // Clear selection if no references available
+          setSelectedRef(null);
         }
       } catch (error: any) {
         console.error("Failed to load reference library", error);
@@ -485,8 +521,9 @@ const TrainingStudio: React.FC = () => {
     };
 
     loadReferences();
+    // Re-run when user changes (login/logout) OR when component mounts (for refresh)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]); // Re-run when user changes (login/logout)
+  }, [user?.id, userRole]); // Added userRole to dependencies to ensure it runs on role changes
 
   // Calculate reference duration from pitch data AND audio duration
   useEffect(() => {
@@ -1663,9 +1700,11 @@ const TrainingStudio: React.FC = () => {
     }, 100);
 
     // Save progress
-    progressService.saveAttempt(selectedRef, result);
-    const progress = progressService.getProgress(selectedRef.id);
-    setProgressData(progress);
+    if (selectedRef && selectedRef.id) {
+      progressService.saveAttempt(selectedRef, result);
+      const progress = progressService.getProgress(selectedRef.id);
+      setProgressData(progress);
+    }
 
     setIsAnalyzing(false);
   };
@@ -1914,14 +1953,14 @@ const TrainingStudio: React.FC = () => {
 
     // Check if user can upload (only Admin and Qari can upload)
     if (userRole === 'public' || !user || (userRole !== 'admin' && userRole !== 'qari')) {
-      alert("Only Admin and Qari users can upload references. Please login or register as Admin/Qari to upload content.");
+      setAlertModal({ isOpen: true, title: 'Upload Restricted', message: "Only Admin and Qari users can upload references. Please login or register as Admin/Qari to upload content.", variant: 'warning' });
       e.target.value = ''; // Reset file input
       return;
     }
 
     // Validate file type
     if (!file.type.startsWith("audio/")) {
-      alert("Please upload a valid audio file");
+      setAlertModal({ isOpen: true, title: 'Invalid File', message: "Please upload a valid audio file", variant: 'error' });
       return;
     }
 
@@ -2012,17 +2051,27 @@ const TrainingStudio: React.FC = () => {
             });
           } catch (error) {
             console.error("Failed to load reference audio:", error);
-            const url = referenceLibraryService.getReferenceAudioUrl(latestRef.id);
+            // Don't fallback to direct URL - it won't work without auth
+            // Set selectedRef without URL - will retry
             setSelectedRef({
               id: latestRef.id,
               title: latestRef.title,
-              url,
+              url: "", // Empty URL - will need to retry
               duration: latestRef.duration || 0,
               maqam: latestRef.maqam || "Library",
               is_preset: latestRef.is_preset || false,
               text_segments: latestRef.text_segments || [],
               ...latestRef,
             });
+            // Retry getting blob URL after a short delay
+            setTimeout(async () => {
+              try {
+                const retryUrl = await referenceLibraryService.getReferenceAudioBlobUrl(latestRef.id);
+                setSelectedRef((prev: any) => prev ? { ...prev, url: retryUrl } : prev);
+              } catch (retryError) {
+                console.error("Retry failed:", retryError);
+              }
+            }, 1000);
           }
         }
         
@@ -2037,8 +2086,17 @@ const TrainingStudio: React.FC = () => {
       try {
         libraryUrl = await referenceLibraryService.getReferenceAudioBlobUrl(savedReference.id);
       } catch (error) {
-        console.error("Failed to load reference audio, using fallback URL:", error);
-        libraryUrl = referenceLibraryService.getReferenceAudioUrl(savedReference.id);
+        console.error("Failed to load reference audio:", error);
+        // Don't use fallback URL - it won't work without auth
+        // Retry getting blob URL
+        try {
+          libraryUrl = await referenceLibraryService.getReferenceAudioBlobUrl(savedReference.id);
+        } catch (retryError) {
+          console.error("Retry also failed:", retryError);
+          // Set error but continue - user can retry manually
+          setReferenceLibraryError("Failed to load reference audio. Please refresh the page.");
+          libraryUrl = ""; // Empty URL
+        }
       }
       setUploadedRefUrl(null); // Clear blob URL since we're using library now
 
@@ -2073,9 +2131,7 @@ const TrainingStudio: React.FC = () => {
       });
       setStudentBlob(null);
       setAnalysisResult(null);
-      alert(
-        "Failed to save reference to library. Using temporary upload instead."
-      );
+      setAlertModal({ isOpen: true, title: 'Warning', message: "Failed to save reference to library. Using temporary upload instead.", variant: 'warning' });
     } finally {
       setIsLoadingReferences(false);
       // Reset progress after a short delay to show completion
@@ -2198,7 +2254,13 @@ const TrainingStudio: React.FC = () => {
                     // Always select the latest file (first in sorted array)
                     if (refs.length > 0) {
                       const latestRef = refs[0];
-                      console.log("[Qari Change] Auto-selecting latest reference:", latestRef.id, latestRef.filename || latestRef.title);
+                      console.log("[Qari Change] Auto-selecting latest reference:", latestRef.id, latestRef.filename || latestRef.title, "upload_date:", latestRef.upload_date);
+                      
+                      // Verify this is actually the latest by checking upload_date
+                      if (refs.length > 1) {
+                        const secondRef = refs[1];
+                        console.log("[Qari Change] Second reference for comparison:", secondRef.id, secondRef.filename, "upload_date:", secondRef.upload_date);
+                      }
                       
                       // Set extraction state to show "Extracting..." immediately
                       setIsExtractingRefPitch(true);
@@ -2226,13 +2288,13 @@ const TrainingStudio: React.FC = () => {
                         console.log("[Qari Change] Selected reference set:", latestRef.id);
                       } catch (error) {
                         console.error("[Qari Change] Failed to load reference audio:", error);
-                        // Fallback to regular URL
-                        const url = referenceLibraryService.getReferenceAudioUrl(latestRef.id);
+                        // Don't fallback to direct URL - it won't work without auth
+                        // Set selectedRef without URL - will retry
                         setSelectedRef({
                           id: latestRef.id,
                           title: latestRef.title,
                           filename: latestRef.filename,
-                          url,
+                          url: "", // Empty URL - will need to retry
                           duration: latestRef.duration || 0,
                           maqam: latestRef.maqam || "Library",
                           is_preset: latestRef.is_preset || false,
@@ -2240,6 +2302,15 @@ const TrainingStudio: React.FC = () => {
                           upload_date: latestRef.upload_date,
                           ...latestRef,
                         });
+                        // Retry getting blob URL after a short delay
+                        setTimeout(async () => {
+                          try {
+                            const retryUrl = await referenceLibraryService.getReferenceAudioBlobUrl(latestRef.id);
+                            setSelectedRef((prev: any) => prev ? { ...prev, url: retryUrl } : prev);
+                          } catch (retryError) {
+                            console.error("[Qari Change] Retry failed:", retryError);
+                          }
+                        }, 1000);
                       }
                     } else {
                       console.log("[Qari Change] No references found after mapping");
@@ -2280,8 +2351,17 @@ const TrainingStudio: React.FC = () => {
               try {
                 url = await referenceLibraryService.getReferenceAudioBlobUrl(ref.id);
               } catch (error) {
-                console.error("Failed to load reference audio, using fallback URL:", error);
-                url = referenceLibraryService.getReferenceAudioUrl(ref.id);
+                console.error("Failed to load reference audio:", error);
+                // Don't fallback to direct URL - it won't work without auth
+                // Retry getting blob URL
+                try {
+                  url = await referenceLibraryService.getReferenceAudioBlobUrl(ref.id);
+                } catch (retryError) {
+                  console.error("Retry also failed:", retryError);
+                  // Show error but don't set URL
+                  setReferenceLibraryError("Failed to load reference audio. Please try again.");
+                  return; // Don't set selectedRef if we can't get the audio
+                }
               }
 
               setUploadedRefUrl(null);
@@ -3052,9 +3132,9 @@ const TrainingStudio: React.FC = () => {
                       : [] // Empty array if no reference pitch available
                   }
                   referenceAudioUrl={
-                    selectedRef.id === "custom" && uploadedRefUrl
+                    selectedRef?.id === "custom" && uploadedRefUrl
                       ? uploadedRefUrl
-                      : selectedRef.url
+                      : (selectedRef?.url || "")
                   }
                   studentAudioUrl={practiceAudioUrl}
                   studentAudioBlob={
@@ -3180,6 +3260,7 @@ const TrainingStudio: React.FC = () => {
                   onRecordingComplete={handleRecordingComplete}
                   onPitchUpdate={handleRecordingPitchUpdate}
                   onRecordingStart={handleRecordingStart}
+                  onError={(message) => setAlertModal({ isOpen: true, title: 'Recording Error', message, variant: 'error' })}
                   recordingPitchData={recordingPitchData}
                   referencePitchData={referencePitchData}
                   referenceDuration={referenceDuration}
@@ -3359,9 +3440,7 @@ const TrainingStudio: React.FC = () => {
                               "[Follow Mode] ❌ Failed to start pitch extraction:",
                               error
                             );
-                            alert(
-                              "Failed to access microphone. Please check permissions."
-                            );
+                            setAlertModal({ isOpen: true, title: 'Microphone Error', message: "Failed to access microphone. Please check permissions.", variant: 'error' });
                             // Stop reference audio if mic access fails
                             if (refWaveSurfer.current) {
                               refWaveSurfer.current.pause();
@@ -3503,9 +3582,7 @@ const TrainingStudio: React.FC = () => {
                             "[Follow Mode] ❌ Failed to start pitch extraction:",
                             error
                           );
-                          alert(
-                            "Failed to access microphone. Please check permissions."
-                          );
+                          setAlertModal({ isOpen: true, title: 'Microphone Error', message: "Failed to access microphone. Please check permissions.", variant: 'error' });
                         }
                       }
 
@@ -4224,6 +4301,15 @@ const TrainingStudio: React.FC = () => {
         }}
         duration={5}
         showAudioCue={true}
+      />
+
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alertModal.isOpen}
+        title={alertModal.title}
+        message={alertModal.message}
+        variant={alertModal.variant}
+        onClose={() => setAlertModal({ isOpen: false, title: '', message: '', variant: 'info' })}
       />
     </div>
   );

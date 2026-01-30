@@ -16,6 +16,7 @@ interface RecorderProps {
   viewMode?: "waveform" | "pitch"; // Display mode
   // New prop to trigger actual recording start (after countdown)
   triggerRecordingStart?: boolean; // When true, starts recording immediately
+  onError?: (message: string) => void; // Error callback for displaying alerts
 }
 
 const Recorder: React.FC<RecorderProps> = ({
@@ -107,7 +108,11 @@ const Recorder: React.FC<RecorderProps> = ({
           onRecordingComplete(blob);
         } else {
           console.warn("No audio chunks collected during recording");
-          alert("No audio was recorded. Please try again.");
+          if (onError) {
+            onError("No audio was recorded. Please try again.");
+          } else {
+            alert("No audio was recorded. Please try again.");
+          }
         }
 
         // Stop pitch extraction
@@ -121,7 +126,11 @@ const Recorder: React.FC<RecorderProps> = ({
 
       mediaRecorder.onerror = (e) => {
         console.error("MediaRecorder error:", e);
-        alert("Audio recording error occurred. Please try again.");
+        if (onError) {
+          onError("Audio recording error occurred. Please try again.");
+        } else {
+          alert("Audio recording error occurred. Please try again.");
+        }
       };
 
       // Start with timeslice to ensure regular data collection
@@ -135,7 +144,11 @@ const Recorder: React.FC<RecorderProps> = ({
       }, 1000);
     } catch (err) {
       console.error("Error accessing microphone:", err);
-      alert("Microphone access denied or not available.");
+      if (onError) {
+        onError("Microphone access denied or not available.");
+      } else {
+        alert("Microphone access denied or not available.");
+      }
     }
   };
 

@@ -5,7 +5,7 @@
  * IMPORTANT: Uses the same API base URL as the main scoring API,
  * so it works both in local dev and on your deployed server.
  */
-import { getAuthHeader } from "./authService";
+import { getAuthHeader, getAuthToken } from "./authService";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -174,22 +174,48 @@ class ReferenceLibraryService {
    */
   async getReferenceAudioBlobUrl(refId: string): Promise<string> {
     try {
+      // Check if token exists before making request
+      const token = getAuthToken();
+      if (!token) {
+        const errorMsg = `Authentication required. Please log in to access reference audio.`;
+        console.error(`[getReferenceAudioBlobUrl] ${errorMsg}`);
+        throw new Error(errorMsg);
+      }
+      
+      const authHeader = getAuthHeader();
+      const headers: HeadersInit = {
+        ...authHeader,
+      };
+      
+      // Verify Authorization header was set
+      if (!headers.Authorization || !headers.Authorization.startsWith('Bearer ')) {
+        const errorMsg = `Failed to get authentication token. Please log in again.`;
+        console.error(`[getReferenceAudioBlobUrl] ${errorMsg}`);
+        throw new Error(errorMsg);
+      }
+      
       const response = await fetch(`${API_BASE_URL}/api/references/${refId}/audio`, {
-        headers: {
-          ...getAuthHeader(),
-        },
+        headers,
       });
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({ detail: response.statusText }));
-        throw new Error(error.detail || `Failed to fetch reference audio: ${response.status}`);
+        const errorMessage = error.detail || `Failed to fetch reference audio: ${response.status}`;
+        console.error(`[getReferenceAudioBlobUrl] Error ${response.status}:`, errorMessage);
+        
+        // If 401/403, suggest re-login
+        if (response.status === 401 || response.status === 403) {
+          throw new Error(`Authentication failed. Please log in again.`);
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const blob = await response.blob();
       const blobUrl = URL.createObjectURL(blob);
       return blobUrl;
     } catch (error: any) {
-      console.error("Error fetching reference audio:", error);
+      console.error(`[getReferenceAudioBlobUrl] Error fetching reference audio for ${refId}:`, error);
       throw error;
     }
   }

@@ -10,6 +10,7 @@ import StudentProgressView from './views/StudentProgress';
 import Login from './components/Login';
 import Register from './components/Register';
 import QariSelector from './components/QariSelector';
+import QariContentEditor from './components/QariContentEditor';
 import { Mic2, LayoutDashboard, Users, BookOpen, Settings, LogOut, BarChart3, User, Monitor, Menu, X } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -453,6 +454,16 @@ const App: React.FC = () => {
               element={
                 isAuthenticated && userRole === 'qari' ? (
                   <QariDashboard />
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
+            />
+            <Route 
+              path="/qari/content/edit/:contentId" 
+              element={
+                isAuthenticated && userRole === 'qari' ? (
+                  <QariContentEditor />
                 ) : (
                   <Navigate to="/login" replace />
                 )

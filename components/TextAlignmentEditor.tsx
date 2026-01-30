@@ -4,6 +4,7 @@ import { TextSegment } from '../services/referenceLibraryService';
 import Waveform from './Waveform';
 import LivePitchGraph from './LivePitchGraph';
 import { PitchData } from '../types';
+import AlertModal from './AlertModal';
 
 interface TextAlignmentEditorProps {
   audioUrl: string;
@@ -30,12 +31,27 @@ const TextAlignmentEditor: React.FC<TextAlignmentEditorProps> = ({
   const [tempStart, setTempStart] = useState(0);
   const [tempEnd, setTempEnd] = useState(0);
   const [tempText, setTempText] = useState('');
+  const [showTextModal, setShowTextModal] = useState(false);
+  const [pendingSegment, setPendingSegment] = useState<{ start: number; end: number } | null>(null);
+  const [segmentText, setSegmentText] = useState('');
+  const [alertModal, setAlertModal] = useState<{ isOpen: boolean; message: string }>({
+    isOpen: false,
+    message: '',
+  });
+  const textInputRef = useRef<HTMLTextAreaElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const waveformRef = useRef<any>(null);
 
   useEffect(() => {
     onSegmentsChange(segments);
   }, [segments, onSegmentsChange]);
+
+  // Focus text input when modal opens
+  useEffect(() => {
+    if (showTextModal && textInputRef.current) {
+      textInputRef.current.focus();
+    }
+  }, [showTextModal]);
 
   useEffect(() => {
     const audio = new Audio(audioUrl);
@@ -107,16 +123,32 @@ const TextAlignmentEditor: React.FC<TextAlignmentEditorProps> = ({
 
   const handleMarkEnd = () => {
     if (tempStart >= currentTime) {
-      alert('End time must be after start time');
+      setAlertModal({ isOpen: true, message: 'End time must be after start time' });
       return;
     }
     setTempEnd(currentTime);
     setMarkingEnd(false);
-    // Show text input for this segment
-    const text = prompt('Enter Arabic text for this segment:');
-    if (text) {
-      addSegment(text.trim(), tempStart, currentTime);
+    // Show modal for text input
+    setPendingSegment({ start: tempStart, end: currentTime });
+    setSegmentText('');
+    setShowTextModal(true);
+  };
+
+  const handleConfirmSegment = () => {
+    if (pendingSegment && segmentText.trim()) {
+      addSegment(segmentText.trim(), pendingSegment.start, pendingSegment.end);
     }
+    setShowTextModal(false);
+    setPendingSegment(null);
+    setSegmentText('');
+    setTempStart(0);
+    setTempEnd(0);
+  };
+
+  const handleCancelSegment = () => {
+    setShowTextModal(false);
+    setPendingSegment(null);
+    setSegmentText('');
     setTempStart(0);
     setTempEnd(0);
   };
@@ -325,6 +357,84 @@ const TextAlignmentEditor: React.FC<TextAlignmentEditorProps> = ({
           </div>
         )}
       </div>
+
+      {/* Text Input Modal */}
+      {showTextModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-lg max-w-md w-full">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-slate-200">
+              <h2 className="text-xl font-bold text-slate-800">Enter Arabic Text</h2>
+              <button
+                onClick={handleCancelSegment}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6">
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Enter Arabic text for this segment:
+                </label>
+                {pendingSegment && (
+                  <p className="text-xs text-slate-500 mb-3">
+                    Time range: {formatTime(pendingSegment.start)} - {formatTime(pendingSegment.end)}
+                  </p>
+                )}
+                <textarea
+                  ref={textInputRef}
+                  value={segmentText}
+                  onChange={(e) => setSegmentText(e.target.value)}
+                  dir="auto"
+                  className="w-full p-3 border border-slate-300 rounded-lg text-lg font-medium focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  style={{ 
+                    fontFamily: 'Arial, "Arabic Typesetting", "Traditional Arabic", sans-serif',
+                    minHeight: '100px'
+                  }}
+                  placeholder="اكتب النص العربي هنا..."
+                  rows={3}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                      handleConfirmSegment();
+                    } else if (e.key === 'Escape') {
+                      handleCancelSegment();
+                    }
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-200">
+              <button
+                onClick={handleCancelSegment}
+                className="px-4 py-2 text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmSegment}
+                disabled={!segmentText.trim()}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alertModal.isOpen}
+        title="Error"
+        message={alertModal.message}
+        variant="error"
+        onClose={() => setAlertModal({ isOpen: false, message: '' })}
+      />
     </div>
   );
 };

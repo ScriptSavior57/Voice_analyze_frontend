@@ -4,6 +4,8 @@ import { referenceLibraryService, ReferenceAudio, TextSegment } from '../service
 import TextAlignmentEditor from './TextAlignmentEditor';
 import { extractReferencePitch } from '../services/apiService';
 import { PitchData } from '../types';
+import AlertModal from './AlertModal';
+import ConfirmModal from './ConfirmModal';
 
 interface PresetEditorProps {
   reference?: ReferenceAudio;
@@ -28,6 +30,13 @@ const PresetEditor: React.FC<PresetEditorProps> = ({
   const [referencePitch, setReferencePitch] = useState<PitchData[]>([]);
   const [loadingPitch, setLoadingPitch] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
+  const [loadingAudio, setLoadingAudio] = useState(false);
+  const [alertModal, setAlertModal] = useState<{ isOpen: boolean; message: string }>({
+    isOpen: false,
+    message: '',
+  });
+  const [saveConfirm, setSaveConfirm] = useState<{ isOpen: boolean }>({ isOpen: false });
 
   useEffect(() => {
     if (!existingPreset) {
@@ -38,8 +47,38 @@ const PresetEditor: React.FC<PresetEditorProps> = ({
   useEffect(() => {
     if (selectedReference && step === 'edit') {
       loadReferencePitch();
+      loadAudioBlobUrl();
     }
+    
+    // Cleanup blob URL when component unmounts or reference changes
+    return () => {
+      if (audioBlobUrl) {
+        URL.revokeObjectURL(audioBlobUrl);
+        setAudioBlobUrl(null);
+      }
+    };
   }, [selectedReference, step]);
+
+  const loadAudioBlobUrl = async () => {
+    if (!selectedReference) return;
+    
+    try {
+      setLoadingAudio(true);
+      // Clean up previous blob URL
+      if (audioBlobUrl) {
+        URL.revokeObjectURL(audioBlobUrl);
+        setAudioBlobUrl(null);
+      }
+      
+      const blobUrl = await referenceLibraryService.getReferenceAudioBlobUrl(selectedReference.id);
+      setAudioBlobUrl(blobUrl);
+    } catch (error) {
+      console.error('Failed to load reference audio blob URL:', error);
+      // Don't set blob URL if it fails - TextAlignmentEditor will handle empty URL
+    } finally {
+      setLoadingAudio(false);
+    }
+  };
 
   const loadReferences = async () => {
     try {
@@ -48,7 +87,7 @@ const PresetEditor: React.FC<PresetEditorProps> = ({
       setReferences(refs);
     } catch (error) {
       console.error('Failed to load references:', error);
-      alert('Failed to load references. Please try again.');
+      setAlertModal({ isOpen: true, message: 'Failed to load references. Please try again.' });
     } finally {
       setLoading(false);
     }
@@ -80,20 +119,23 @@ const PresetEditor: React.FC<PresetEditorProps> = ({
     setTextSegments(segments);
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!selectedReference) {
-      alert('Please select a reference audio');
+      setAlertModal({ isOpen: true, message: 'Please select a reference audio' });
       return;
     }
     if (!title.trim()) {
-      alert('Please enter a title for the preset');
+      setAlertModal({ isOpen: true, message: 'Please enter a title for the preset' });
       return;
     }
     if (textSegments.length === 0) {
-      if (!confirm('No text segments added. Save preset without text segments?')) {
-        return;
-      }
+      setSaveConfirm({ isOpen: true });
+      return;
     }
+    performSave();
+  };
+
+  const performSave = async () => {
 
     try {
       setSaving(true);
@@ -155,7 +197,8 @@ const PresetEditor: React.FC<PresetEditorProps> = ({
     return null;
   }
 
-  const audioUrl = referenceLibraryService.getReferenceAudioUrl(selectedReference.id);
+  // Use blob URL if available, otherwise empty string (will show loading or error)
+  const audioUrl = audioBlobUrl || "";
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
@@ -209,9 +252,13 @@ const PresetEditor: React.FC<PresetEditorProps> = ({
         </div>
 
         {/* Text Alignment Editor */}
-        {loadingPitch ? (
+        {loadingPitch || loadingAudio ? (
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
             <div className="text-slate-500">Loading audio and pitch data...</div>
+          </div>
+        ) : !audioUrl ? (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
+            <div className="text-red-500">Failed to load audio. Please try again.</div>
           </div>
         ) : (
           <TextAlignmentEditor
@@ -242,6 +289,30 @@ const PresetEditor: React.FC<PresetEditorProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alertModal.isOpen}
+        title="Error"
+        message={alertModal.message}
+        variant="error"
+        onClose={() => setAlertModal({ isOpen: false, message: '' })}
+      />
+
+      {/* Save Confirmation Modal */}
+      <ConfirmModal
+        isOpen={saveConfirm.isOpen}
+        title="No Text Segments"
+        message="No text segments added. Save preset without text segments?"
+        confirmText="Save"
+        cancelText="Cancel"
+        variant="warning"
+        onConfirm={() => {
+          setSaveConfirm({ isOpen: false });
+          performSave();
+        }}
+        onCancel={() => setSaveConfirm({ isOpen: false })}
+      />
     </div>
   );
 };
