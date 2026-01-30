@@ -23,7 +23,7 @@ export interface RegisterData {
   full_name?: string;
   ic_number?: string;
   address?: string;
-  role: "student"; // Only student allowed in registration
+  role: "student" | "qari"; // Allow both student and qari registration
 }
 
 export interface AuthToken {

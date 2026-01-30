@@ -22,6 +22,7 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin, onSuccess, onClose
   const [fullName, setFullName] = useState("");
   const [icNumber, setIcNumber] = useState("");
   const [address, setAddress] = useState("");
+  const [role, setRole] = useState<"student" | "qari">("student");
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Password validation rules
@@ -54,11 +55,15 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin, onSuccess, onClose
           full_name: fullName || undefined,
           ic_number: icNumber || undefined,
           address: address || undefined,
-          role: "student", // Only student registration allowed
+          role: role, // Use selected role (student or qari)
         })
       ).unwrap();
-      // Show success message
-      setSuccessMessage("Registered successfully! Please wait for approval from admin before logging in.");
+      // Show success message based on role
+      if (role === "student") {
+        setSuccessMessage("Registered successfully! You can now log in.");
+      } else {
+        setSuccessMessage("Registered successfully! Please wait for approval from admin before logging in.");
+      }
       // Redirect to login after 3 seconds
       setTimeout(() => {
         onSuccess?.();
@@ -149,6 +154,28 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin, onSuccess, onClose
                 placeholder="Your address"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Account Type <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value as "student" | "qari")}
+                required
+                className="w-full pl-4 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              >
+                <option value="student">Student</option>
+                <option value="qari">Qari</option>
+              </select>
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              {role === "student" 
+                ? "Students can log in immediately after registration."
+                : "Qari accounts require admin approval before you can log in."}
+            </p>
           </div>
 
           <div>
