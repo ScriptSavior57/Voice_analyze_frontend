@@ -3,10 +3,9 @@
  */
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getQariStudents, getQariContent, getQariCommissionStats, getStudentDetails, StudentDetails, addQariContent, deleteQariContent } from "../services/platformService";
+import { getQariStudents, getQariContent, getQariCommissionStats, getStudentDetails, StudentDetails, deleteQariContent } from "../services/platformService";
 import { StudentInfo, QariContent } from "../services/platformService";
-import { referenceLibraryService } from "../services/referenceLibraryService";
-import { Users, TrendingUp, TrendingDown, BookOpen, BarChart3, DollarSign, Copy, Check, X, Play, FileAudio, Upload, Plus, ChevronDown, Edit, Trash2 } from "lucide-react";
+import { Users, TrendingUp, TrendingDown, BookOpen, BarChart3, DollarSign, Copy, Check, X, Play, FileAudio, ChevronDown, Edit, Trash2 } from "lucide-react";
 import ConfirmModal from "../components/ConfirmModal";
 
 const QariDashboard: React.FC = () => {
@@ -25,14 +24,6 @@ const QariDashboard: React.FC = () => {
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [studentDetails, setStudentDetails] = useState<StudentDetails | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadForm, setUploadForm] = useState({
-    title: "",
-    maqam: "",
-    file: null as File | null,
-  });
   const [studentFilter, setStudentFilter] = useState<string>("all");
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; contentId: string; filename: string }>({
@@ -91,90 +82,6 @@ const QariDashboard: React.FC = () => {
     setStudentDetails(null);
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      // Validate file type
-      if (!file.type.startsWith("audio/") && !file.name.match(/\.(mp3|wav|m4a|ogg|flac)$/i)) {
-        setError("Please select a valid audio file (MP3, WAV, M4A, OGG, or FLAC)");
-        return;
-      }
-      
-      // Validate file size (max 50MB)
-      if (file.size > 50 * 1024 * 1024) {
-        setError("File size must be less than 50MB");
-        return;
-      }
-
-      setUploadForm((prev) => ({
-        ...prev,
-        file,
-        title: prev.title || file.name.replace(/\.[^/.]+$/, ""), // Auto-fill title from filename
-      }));
-      setError(null);
-    }
-  };
-
-  const handleUpload = async () => {
-    if (!uploadForm.file) {
-      setError("Please select an audio file");
-      return;
-    }
-
-    try {
-      setUploading(true);
-      setUploadProgress(0);
-      setError(null);
-
-      // Step 1: Upload the reference audio file
-      // Backend automatically adds to Qari's Content Library when Qari uploads
-      const uploadedReference = await referenceLibraryService.uploadReference(
-        uploadForm.file,
-        uploadForm.title || uploadForm.file.name.replace(/\.[^/.]+$/, ""),
-        uploadForm.maqam || undefined,
-        (progress) => {
-          setUploadProgress(progress);
-        },
-        false // Qari content is private by default
-      );
-
-      // Step 2: Backend already added to Content Library automatically
-      // But we can also add it explicitly if needed (idempotent - safe to call twice)
-      try {
-        await addQariContent({
-          reference_id: uploadedReference.id,
-          maqam: uploadForm.maqam || undefined,
-        });
-      } catch (addError: any) {
-        // Non-critical - backend already added it, just log
-        console.warn("Could not explicitly add to Content Library (may already exist):", addError);
-      }
-
-      // Step 3: Refresh the content library
-      const contentData = await getQariContent();
-      setContent(contentData.content);
-
-      // Step 4: Close modal and reset form
-      setShowUploadModal(false);
-      setUploadForm({ title: "", maqam: "", file: null });
-      setUploadProgress(0);
-    } catch (err: any) {
-      setError(err.message || "Failed to upload reference audio");
-      console.error("Upload error:", err);
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const closeUploadModal = () => {
-    if (!uploading) {
-      setShowUploadModal(false);
-      setUploadForm({ title: "", maqam: "", file: null });
-      setUploadProgress(0);
-      setError(null);
-    }
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
@@ -186,7 +93,7 @@ const QariDashboard: React.FC = () => {
     );
   }
 
-  if (error && !showUploadModal) {
+  if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
         <div className="bg-white rounded-xl shadow-lg border border-red-200 p-6 max-w-md w-full">
@@ -513,26 +420,12 @@ const QariDashboard: React.FC = () => {
         <div className="bg-white rounded-xl shadow-md border border-slate-200 p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold text-gray-800">My Content Library</h2>
-          <button
-            onClick={() => setShowUploadModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            Upload Reference Audio
-          </button>
         </div>
         {content.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <BookOpen className="w-16 h-16 mx-auto mb-4 text-gray-300" />
             <p>No content yet.</p>
-            <p className="text-sm mt-2">Add reference audios to your library to share with students.</p>
-            <button
-              onClick={() => setShowUploadModal(true)}
-              className="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors inline-flex items-center gap-2"
-            >
-              <Upload className="w-4 h-4" />
-              Upload Your First Reference
-            </button>
+            <p className="text-sm mt-2">Upload reference audios in the Training Studio to add them to your library.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -599,151 +492,6 @@ const QariDashboard: React.FC = () => {
           </div>
         )}
       </div>
-
-      {/* Upload Modal */}
-      {showUploadModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-2xl font-bold text-gray-800">Upload Reference Audio</h2>
-              <button
-                onClick={closeUploadModal}
-                disabled={uploading}
-                className="text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            {/* Modal Content */}
-            <div className="flex-1 overflow-y-auto p-6">
-              {error && (
-                <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
-                  {error}
-                </div>
-              )}
-
-              <div className="space-y-4">
-                {/* File Upload */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Audio File <span className="text-red-500">*</span>
-                  </label>
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-green-500 transition-colors">
-                    <input
-                      type="file"
-                      accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac"
-                      onChange={handleFileSelect}
-                      disabled={uploading}
-                      className="hidden"
-                      id="audio-upload"
-                    />
-                    <label
-                      htmlFor="audio-upload"
-                      className="cursor-pointer flex flex-col items-center"
-                    >
-                      <Upload className="w-12 h-12 text-gray-400 mb-2" />
-                      <span className="text-sm text-gray-600">
-                        {uploadForm.file
-                          ? uploadForm.file.name
-                          : "Click to select or drag and drop audio file"}
-                      </span>
-                      <span className="text-xs text-gray-500 mt-1">
-                        MP3, WAV, M4A, OGG, FLAC (Max 50MB)
-                      </span>
-                    </label>
-                  </div>
-                  {uploadForm.file && (
-                    <div className="mt-2 text-sm text-gray-600">
-                      <p>Selected: {uploadForm.file.name}</p>
-                      <p>Size: {(uploadForm.file.size / 1024 / 1024).toFixed(2)} MB</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Title */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Title <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={uploadForm.title}
-                    onChange={(e) =>
-                      setUploadForm((prev) => ({ ...prev, title: e.target.value }))
-                    }
-                    disabled={uploading}
-                    placeholder="Enter reference title (e.g., Surah Al-Fatiha)"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-gray-100"
-                  />
-                </div>
-
-                {/* Maqam */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Maqam (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={uploadForm.maqam}
-                    onChange={(e) =>
-                      setUploadForm((prev) => ({ ...prev, maqam: e.target.value }))
-                    }
-                    disabled={uploading}
-                    placeholder="Enter maqam (e.g., Bayati, Rast, Hijaz)"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-gray-100"
-                  />
-                </div>
-
-                {/* Upload Progress */}
-                {uploading && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm text-gray-600">
-                      <span>Uploading...</span>
-                      <span>{uploadProgress}%</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-green-600 h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${uploadProgress}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
-              <button
-                onClick={closeUploadModal}
-                disabled={uploading}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleUpload}
-                disabled={uploading || !uploadForm.file || !uploadForm.title.trim()}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {uploading ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Uploading...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-4 h-4" />
-                    Upload
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Student Details Modal */}
       {selectedStudentId && (

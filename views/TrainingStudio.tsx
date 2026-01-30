@@ -330,11 +330,11 @@ const TrainingStudio: React.FC = () => {
                 filename: item.filename || item.title || item.reference_title || "",
                 file_path: item.file_path || "",
                 duration: item.duration || item.reference_duration || 0,
-                upload_date: item.upload_date || item.created_at || "",
+                upload_date: item.upload_date || null, // Preserve null, don't convert to empty string
                 file_size: item.file_size || 0,
                 is_preset: item.is_preset || false,
                 text_segments: item.text_segments || [],
-                created_at: item.created_at || item.upload_date || "", // For sorting
+                created_at: item.created_at || item.upload_date || null, // Preserve null for sorting
               }));
               
               console.log("[Student Load] Mapped references:", mappedRefs.map((r: any) => ({ 
@@ -348,13 +348,28 @@ const TrainingStudio: React.FC = () => {
               // Sort by upload_date FIRST (actual file upload date), then created_at as fallback
               // This ensures the latest uploaded file appears first, not when it was added to Qari's library
               refs = mappedRefs.sort((a: any, b: any) => {
-                // Prioritize upload_date (file upload date) over created_at (QariContent creation date)
-                const dateA = a.upload_date 
-                  ? new Date(a.upload_date).getTime() 
-                  : (a.created_at ? new Date(a.created_at).getTime() : 0);
-                const dateB = b.upload_date 
-                  ? new Date(b.upload_date).getTime() 
-                  : (b.created_at ? new Date(b.created_at).getTime() : 0);
+                // Helper function to safely get timestamp
+                const getTimestamp = (item: any): number => {
+                  // Try upload_date first
+                  if (item.upload_date && item.upload_date !== "" && item.upload_date !== null) {
+                    const date = new Date(item.upload_date);
+                    if (!isNaN(date.getTime())) {
+                      return date.getTime();
+                    }
+                  }
+                  // Fallback to created_at
+                  if (item.created_at && item.created_at !== "" && item.created_at !== null) {
+                    const date = new Date(item.created_at);
+                    if (!isNaN(date.getTime())) {
+                      return date.getTime();
+                    }
+                  }
+                  // Return 0 for invalid dates (will sort to end)
+                  return 0;
+                };
+                
+                const dateA = getTimestamp(a);
+                const dateB = getTimestamp(b);
                 
                 // Debug: Log comparison for first few items
                 if (mappedRefs.indexOf(a) < 3 && mappedRefs.indexOf(b) < 3) {
@@ -2221,23 +2236,39 @@ const TrainingStudio: React.FC = () => {
                       filename: item.filename || item.reference_title || item.title || "",
                       file_path: item.file_path || "",
                       duration: item.reference_duration || item.duration || 0,
-                      upload_date: item.upload_date || item.created_at || "",
+                      upload_date: item.upload_date || null, // Preserve null, don't convert to empty string
                       file_size: item.file_size || 0,
                       is_preset: item.is_preset || false,
                       text_segments: item.text_segments || [],
-                      created_at: item.created_at || item.upload_date || "",
+                      created_at: item.created_at || item.upload_date || null, // Preserve null for sorting
                     }));
                     
                     // Sort by upload_date FIRST (actual file upload date), then created_at as fallback
                     // This ensures the latest uploaded file appears first, not when it was added to Qari's library
                     const refs = mappedRefs.sort((a: any, b: any) => {
-                      // Prioritize upload_date (file upload date) over created_at (QariContent creation date)
-                      const dateA = a.upload_date 
-                        ? new Date(a.upload_date).getTime() 
-                        : (a.created_at ? new Date(a.created_at).getTime() : 0);
-                      const dateB = b.upload_date 
-                        ? new Date(b.upload_date).getTime() 
-                        : (b.created_at ? new Date(b.created_at).getTime() : 0);
+                      // Helper function to safely get timestamp
+                      const getTimestamp = (item: any): number => {
+                        // Try upload_date first
+                        if (item.upload_date && item.upload_date !== "" && item.upload_date !== null) {
+                          const date = new Date(item.upload_date);
+                          if (!isNaN(date.getTime())) {
+                            return date.getTime();
+                          }
+                        }
+                        // Fallback to created_at
+                        if (item.created_at && item.created_at !== "" && item.created_at !== null) {
+                          const date = new Date(item.created_at);
+                          if (!isNaN(date.getTime())) {
+                            return date.getTime();
+                          }
+                        }
+                        // Return 0 for invalid dates (will sort to end)
+                        return 0;
+                      };
+                      
+                      const dateA = getTimestamp(a);
+                      const dateB = getTimestamp(b);
+                      
                       return dateB - dateA; // Descending order (newest first)
                     });
                     
