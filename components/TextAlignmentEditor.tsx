@@ -30,6 +30,8 @@ const TextAlignmentEditor: React.FC<TextAlignmentEditorProps> = ({
   const [isPlaying, setIsPlaying] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editText, setEditText] = useState('');
+  const [editStart, setEditStart] = useState<number>(0);
+  const [editEnd, setEditEnd] = useState<number>(0);
   const [markingStart, setMarkingStart] = useState(false);
   const [markingEnd, setMarkingEnd] = useState(false);
   const [tempStart, setTempStart] = useState(0);
@@ -200,23 +202,52 @@ const TextAlignmentEditor: React.FC<TextAlignmentEditorProps> = ({
   const handleEditSegment = (index: number) => {
     setEditingIndex(index);
     setEditText(segments[index].text);
+    setEditStart(segments[index].start);
+    setEditEnd(segments[index].end);
   };
 
   const handleSaveEdit = () => {
     if (editingIndex !== null) {
+      // Validate: end must be greater than start
+      if (editEnd <= editStart) {
+        setAlertModal({ 
+          isOpen: true, 
+          message: 'End time must be greater than start time.' 
+        });
+        return;
+      }
+      
+      // Validate: times must be within audio duration
+      if (editStart < 0 || editEnd > duration) {
+        setAlertModal({ 
+          isOpen: true, 
+          message: `Times must be between 0 and ${formatTime(duration)}.` 
+        });
+        return;
+      }
+      
       const updated = [...segments];
-      updated[editingIndex] = { ...updated[editingIndex], text: editText };
+      updated[editingIndex] = { 
+        ...updated[editingIndex], 
+        text: editText,
+        start: editStart,
+        end: editEnd
+      };
       // Sort by start time (ascending - smallest first)
       const sorted = updated.sort((a, b) => (a.start || 0) - (b.start || 0));
       setSegments(sorted);
       setEditingIndex(null);
       setEditText('');
+      setEditStart(0);
+      setEditEnd(0);
     }
   };
 
   const handleCancelEdit = () => {
     setEditingIndex(null);
     setEditText('');
+    setEditStart(0);
+    setEditEnd(0);
   };
 
   const handleSeekToSegment = (start: number) => {
@@ -330,11 +361,41 @@ const TextAlignmentEditor: React.FC<TextAlignmentEditorProps> = ({
                       <textarea
                         value={editText}
                         onChange={(e) => setEditText(e.target.value)}
-                        dir="rtl"
+                        dir="auto"
                         className="w-full p-2 border border-slate-300 rounded-lg text-lg font-medium"
                         style={{ fontFamily: 'Arial, "Arabic Typesetting", "Traditional Arabic", sans-serif' }}
                         rows={2}
                       />
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">
+                            Start Time (seconds)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max={duration}
+                            value={editStart}
+                            onChange={(e) => setEditStart(parseFloat(e.target.value) || 0)}
+                            className="w-full px-2 py-1 border border-slate-300 rounded text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">
+                            End Time (seconds)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max={duration}
+                            value={editEnd}
+                            onChange={(e) => setEditEnd(parseFloat(e.target.value) || 0)}
+                            className="w-full px-2 py-1 border border-slate-300 rounded text-sm"
+                          />
+                        </div>
+                      </div>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={handleSaveEdit}
