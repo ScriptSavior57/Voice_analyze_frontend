@@ -5,12 +5,12 @@ import React, { useState, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { registerUser } from "../store/slices/authSlice";
 import { RootState } from "../store";
-import { UserPlus, Mail, Lock, User, AlertCircle, Check, X } from "lucide-react";
+import { UserPlus, Mail, Lock, User, AlertCircle, Check, X, CheckCircle, Info } from "lucide-react";
 
 interface RegisterProps {
   onSwitchToLogin: () => void;
   onSuccess?: () => void;
-  onClose?: () => void; // Optional: for public users to go back to demo
+  onClose?: () => void; // Optional: for public users to go back to demo (not used with routing)
 }
 
 const Register: React.FC<RegisterProps> = ({ onSwitchToLogin, onSuccess, onClose }) => {
@@ -20,7 +20,9 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin, onSuccess, onClose
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
-  const [role, setRole] = useState<"student" | "qari">("student");
+  const [icNumber, setIcNumber] = useState("");
+  const [address, setAddress] = useState("");
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Password validation rules
   const passwordRules = useMemo(() => {
@@ -43,36 +45,52 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin, onSuccess, onClose
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSuccessMessage(null);
     try {
       await dispatch(
         registerUser({
           email,
           password,
           full_name: fullName || undefined,
-          role,
+          ic_number: icNumber || undefined,
+          address: address || undefined,
+          role: "student", // Only student registration allowed
         })
       ).unwrap();
-      onSuccess?.();
+      // Show success message
+      setSuccessMessage("Registered successfully! Please wait for approval from admin before logging in.");
+      // Redirect to login after 3 seconds
+      setTimeout(() => {
+        onSuccess?.();
+      }, 3000);
     } catch (err) {
       // Error is handled by Redux state
+      setSuccessMessage(null);
     }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-blue-50 p-4 relative">
-      {onClose && (
-        <button
-          onClick={onClose}
-          className="absolute top-4 left-4 text-gray-500 hover:text-gray-700 text-sm font-medium"
-        >
-          ← Back to Demo
-        </button>
-      )}
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-800 mb-2">Tarannum AI</h1>
           <p className="text-gray-600">Create your account</p>
         </div>
+
+        {successMessage && (
+          <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-emerald-50 border-2 border-blue-300 rounded-lg flex items-start gap-3 text-blue-800 shadow-md animate-fade-in">
+            <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+              <CheckCircle className="w-6 h-6 text-white" />
+            </div>
+            <div className="flex-1">
+              <div className="font-semibold text-blue-900 mb-1 text-base">Registration Successful!</div>
+              <span className="text-sm text-blue-700">{successMessage}</span>
+              <div className="mt-2 text-xs text-blue-600">
+                Redirecting to login page...
+              </div>
+            </div>
+          </div>
+        )}
 
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
@@ -81,10 +99,10 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin, onSuccess, onClose
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" style={{ display: successMessage ? 'none' : 'block' }}>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Full Name (Optional)
+              Full Name <span className="text-red-500">*</span>
             </label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -92,15 +110,50 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin, onSuccess, onClose
                 type="text"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
+                required
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                placeholder="Your name"
+                placeholder="Your full name"
               />
             </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email
+              IC Number <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <input
+                type="text"
+                value={icNumber}
+                onChange={(e) => setIcNumber(e.target.value)}
+                required
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                placeholder="Your IC/Identity Card Number"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Address <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <textarea
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                required
+                rows={3}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+                placeholder="Your address"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Email <span className="text-red-500">*</span>
             </label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -185,58 +238,6 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin, onSuccess, onClose
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              I am a
-            </label>
-            <div className="flex gap-4">
-              <label className="flex-1 cursor-pointer">
-                <input
-                  type="radio"
-                  name="role"
-                  value="student"
-                  checked={role === "student"}
-                  onChange={(e) => setRole(e.target.value as "student" | "qari")}
-                  className="sr-only"
-                />
-                <div
-                  className={`p-3 border-2 rounded-lg text-center ${
-                    role === "student"
-                      ? "border-green-500 bg-green-50"
-                      : "border-gray-200 hover:border-gray-300"
-                  }`}
-                >
-                  <div className="font-medium">Student</div>
-                  <div className="text-xs text-gray-600 mt-1">Learn & Practice</div>
-                </div>
-              </label>
-              <label className="flex-1 cursor-pointer">
-                <input
-                  type="radio"
-                  name="role"
-                  value="qari"
-                  checked={role === "qari"}
-                  onChange={(e) => setRole(e.target.value as "student" | "qari")}
-                  className="sr-only"
-                />
-                <div
-                  className={`p-3 border-2 rounded-lg text-center ${
-                    role === "qari"
-                      ? "border-green-500 bg-green-50"
-                      : "border-gray-200 hover:border-gray-300"
-                  }`}
-                >
-                  <div className="font-medium">Qari / Teacher</div>
-                  <div className="text-xs text-gray-600 mt-1">Teach & Guide</div>
-                </div>
-              </label>
-            </div>
-            {role === "qari" && (
-              <p className="text-xs text-amber-600 mt-2">
-                Note: Qari accounts require admin approval before activation.
-              </p>
-            )}
-          </div>
 
           <button
             type="submit"
@@ -257,17 +258,19 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin, onSuccess, onClose
           </button>
         </form>
 
-        <div className="mt-6 text-center">
-          <p className="text-sm text-gray-600">
-            Already have an account?{" "}
-            <button
-              onClick={onSwitchToLogin}
-              className="text-green-600 hover:text-green-700 font-medium"
-            >
-              Sign in here
-            </button>
-          </p>
-        </div>
+        {!successMessage && (
+          <div className="mt-6 text-center">
+            <p className="text-sm text-gray-600">
+              Already have an account?{" "}
+              <button
+                onClick={onSwitchToLogin}
+                className="text-green-600 hover:text-green-700 font-medium"
+              >
+                Sign in here
+              </button>
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

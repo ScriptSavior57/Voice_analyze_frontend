@@ -387,7 +387,7 @@ const AdminMode: React.FC<AdminModeProps> = ({ view = 'presets' }) => {
                 >
                   <div className="mb-4">
                     <h3 className="text-lg font-semibold text-slate-800 mb-1">
-                      {preset.title}
+                      {preset.filename || preset.title}
                     </h3>
                     {preset.maqam && (
                       <p className="text-sm text-slate-500">Maqam: {preset.maqam}</p>
@@ -893,7 +893,7 @@ const AdminMode: React.FC<AdminModeProps> = ({ view = 'presets' }) => {
                       {statistics.content.top_references.slice(0, 5).map((ref, idx) => (
                         <div key={ref.id} className="flex items-center justify-between p-2 bg-slate-50 rounded">
                           <span className="text-sm text-slate-700">
-                            {idx + 1}. {ref.title}
+                            {idx + 1}. {ref.filename || ref.title}
                           </span>
                           <span className="text-sm font-medium text-slate-600">
                             {ref.usage_count} uses

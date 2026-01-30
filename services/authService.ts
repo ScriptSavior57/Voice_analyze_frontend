@@ -21,7 +21,9 @@ export interface RegisterData {
   email: string;
   password: string;
   full_name?: string;
-  role: "admin" | "qari" | "student";
+  ic_number?: string;
+  address?: string;
+  role: "student"; // Only student allowed in registration
 }
 
 export interface AuthToken {
@@ -118,7 +120,9 @@ export const login = async (credentials: LoginCredentials): Promise<AuthToken> =
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: response.statusText }));
-    throw new Error(error.detail || "Login failed");
+    // Preserve the specific error message from backend (especially for approval status)
+    const errorMessage = error.detail || response.statusText || "Login failed";
+    throw new Error(errorMessage);
   }
 
   const tokenData: AuthToken = await response.json();

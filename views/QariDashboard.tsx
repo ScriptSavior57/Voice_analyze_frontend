@@ -2,10 +2,10 @@
  * Qari Dashboard - View students, scores, and progress.
  */
 import React, { useEffect, useState } from "react";
-import { getQariStudents, getQariContent, getQariCommissionStats, getStudentDetails, StudentDetails, addQariContent } from "../services/platformService";
+import { getQariStudents, getQariContent, getQariCommissionStats, getStudentDetails, StudentDetails, addQariContent, updateQariContent } from "../services/platformService";
 import { StudentInfo, QariContent } from "../services/platformService";
 import { referenceLibraryService } from "../services/referenceLibraryService";
-import { Users, TrendingUp, TrendingDown, BookOpen, BarChart3, DollarSign, Copy, Check, X, Play, FileAudio, Upload, Plus, ChevronDown } from "lucide-react";
+import { Users, TrendingUp, TrendingDown, BookOpen, BarChart3, DollarSign, Copy, Check, X, Play, FileAudio, Upload, Plus, ChevronDown, Edit } from "lucide-react";
 
 const QariDashboard: React.FC = () => {
   const [students, setStudents] = useState<StudentInfo[]>([]);
@@ -32,6 +32,14 @@ const QariDashboard: React.FC = () => {
   });
   const [studentFilter, setStudentFilter] = useState<string>("all");
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [editingContent, setEditingContent] = useState<QariContent | null>(null);
+  const [editForm, setEditForm] = useState({
+    surah_number: "",
+    surah_name: "",
+    ayah_number: "",
+    maqam: "",
+  });
+  const [savingContent, setSavingContent] = useState(false);
 
   useEffect(() => {
     loadDashboard();
@@ -531,16 +539,33 @@ const QariDashboard: React.FC = () => {
             {content.map((item) => (
               <div
                 key={item.id}
-                className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors relative group"
               >
-                <h3 className="font-semibold text-gray-800 mb-1">
-                  {item.reference_title || "Untitled"}
+                <button
+                  onClick={() => {
+                    setEditingContent(item);
+                    setEditForm({
+                      surah_number: item.surah_number?.toString() || "",
+                      surah_name: item.surah_name || "",
+                      ayah_number: item.ayah_number?.toString() || "",
+                      maqam: item.maqam || "",
+                    });
+                  }}
+                  className="absolute top-2 right-2 p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                  title="Edit surah/ayah settings"
+                >
+                  <Edit className="w-4 h-4" />
+                </button>
+                <h3 className="font-semibold text-gray-800 mb-1 pr-8">
+                  {item.filename || item.reference_title || "Untitled"}
                 </h3>
-                {item.surah_name && (
+                {item.surah_number || item.surah_name ? (
                   <p className="text-sm text-gray-600">
-                    {item.surah_name}
+                    {item.surah_name || `Surah ${item.surah_number}`}
                     {item.ayah_number && ` - Ayah ${item.ayah_number}`}
                   </p>
+                ) : (
+                  <p className="text-sm text-amber-600 italic">Surah/Ayah not set</p>
                 )}
                 {item.maqam && (
                   <span className="inline-block mt-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
@@ -695,6 +720,168 @@ const QariDashboard: React.FC = () => {
                   <>
                     <Upload className="w-4 h-4" />
                     Upload
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Content Modal (Surah/Ayah Settings) */}
+      {editingContent && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-2xl font-bold text-gray-800">Set Surah/Ayah Settings</h2>
+              <button
+                onClick={() => {
+                  setEditingContent(null);
+                  setEditForm({ surah_number: "", surah_name: "", ayah_number: "", maqam: "" });
+                }}
+                disabled={savingContent}
+                className="text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  <strong>Reference:</strong> {editingContent.reference_title || "Untitled"}
+                </p>
+                <p className="text-xs text-blue-600 mt-1">
+                  Set the surah and ayah information for this reference audio. This helps organize your content library and makes it easier for students to find specific verses.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                {/* Surah Number */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Surah Number
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="114"
+                    value={editForm.surah_number}
+                    onChange={(e) =>
+                      setEditForm((prev) => ({ ...prev, surah_number: e.target.value }))
+                    }
+                    disabled={savingContent}
+                    placeholder="Enter surah number (1-114)"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent disabled:bg-gray-100"
+                  />
+                </div>
+
+                {/* Surah Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Surah Name (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.surah_name}
+                    onChange={(e) =>
+                      setEditForm((prev) => ({ ...prev, surah_name: e.target.value }))
+                    }
+                    disabled={savingContent}
+                    placeholder="Enter surah name (e.g., Al-Fatiha, Al-Baqarah)"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent disabled:bg-gray-100"
+                  />
+                </div>
+
+                {/* Ayah Number */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Ayah Number (Optional)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={editForm.ayah_number}
+                    onChange={(e) =>
+                      setEditForm((prev) => ({ ...prev, ayah_number: e.target.value }))
+                    }
+                    disabled={savingContent}
+                    placeholder="Enter ayah number"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent disabled:bg-gray-100"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Leave empty if this reference covers multiple ayahs or the entire surah.
+                  </p>
+                </div>
+
+                {/* Maqam */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Maqam (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.maqam}
+                    onChange={(e) =>
+                      setEditForm((prev) => ({ ...prev, maqam: e.target.value }))
+                    }
+                    disabled={savingContent}
+                    placeholder="Enter maqam (e.g., Bayati, Rast, Hijaz)"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent disabled:bg-gray-100"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
+              <button
+                onClick={() => {
+                  setEditingContent(null);
+                  setEditForm({ surah_number: "", surah_name: "", ayah_number: "", maqam: "" });
+                }}
+                disabled={savingContent}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!editingContent) return;
+                  try {
+                    setSavingContent(true);
+                    setError(null);
+                    await updateQariContent(editingContent.id, {
+                      surah_number: editForm.surah_number ? parseInt(editForm.surah_number) : undefined,
+                      surah_name: editForm.surah_name || undefined,
+                      ayah_number: editForm.ayah_number ? parseInt(editForm.ayah_number) : undefined,
+                      maqam: editForm.maqam || undefined,
+                    });
+                    // Refresh content library
+                    const contentData = await getQariContent();
+                    setContent(contentData.content);
+                    setEditingContent(null);
+                    setEditForm({ surah_number: "", surah_name: "", ayah_number: "", maqam: "" });
+                  } catch (err: any) {
+                    setError(err.message || "Failed to update content settings");
+                  } finally {
+                    setSavingContent(false);
+                  }
+                }}
+                disabled={savingContent}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {savingContent ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    Save Settings
                   </>
                 )}
               </button>

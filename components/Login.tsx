@@ -1,30 +1,44 @@
 /**
  * Login component for user authentication.
  */
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { loginUser } from "../store/slices/authSlice";
 import { RootState } from "../store";
-import { LogIn, Mail, Lock, AlertCircle } from "lucide-react";
+import { LogIn, Mail, Lock, AlertCircle, CheckCircle } from "lucide-react";
 
 interface LoginProps {
   onSwitchToRegister: () => void;
   onSuccess?: () => void;
-  onClose?: () => void; // Optional: for public users to go back to demo
+  onClose?: () => void; // Optional: for public users to go back to demo (not used with routing)
 }
 
 const Login: React.FC<LoginProps> = ({ onSwitchToRegister, onSuccess, onClose }) => {
   const dispatch = useDispatch();
-  const { isLoading, error } = useSelector((state: RootState) => state.auth);
+  const { isLoading, error, isAuthenticated } = useSelector((state: RootState) => state.auth);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Show success message when login is successful
+  useEffect(() => {
+    if (isAuthenticated && !isLoading && !error) {
+      setSuccessMessage("Logged in successfully!");
+      const timer = setTimeout(() => {
+        setSuccessMessage(null);
+        onSuccess?.();
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [isAuthenticated, isLoading, error, onSuccess]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSuccessMessage(null);
     try {
       await dispatch(loginUser({ email, password })).unwrap();
-      onSuccess?.();
+      // Success message will be shown via useEffect
     } catch (err) {
       // Error is handled by Redux state
     }
@@ -32,19 +46,18 @@ const Login: React.FC<LoginProps> = ({ onSwitchToRegister, onSuccess, onClose })
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-blue-50 p-4 relative">
-      {onClose && (
-        <button
-          onClick={onClose}
-          className="absolute top-4 left-4 text-gray-500 hover:text-gray-700 text-sm font-medium"
-        >
-          ← Back to Demo
-        </button>
-      )}
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-800 mb-2">Tarannum AI</h1>
           <p className="text-gray-600">Sign in to your account</p>
         </div>
+
+        {successMessage && (
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-green-700 animate-fade-in">
+            <CheckCircle className="w-5 h-5" />
+            <span className="text-sm font-medium">{successMessage}</span>
+          </div>
+        )}
 
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">

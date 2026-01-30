@@ -50,13 +50,9 @@ export const registerUser = createAsyncThunk(
   async (data: RegisterData, { rejectWithValue }) => {
     try {
       await registerService(data);
-      // After registration, automatically login
-      const tokenData = await loginService({
-        email: data.email,
-        password: data.password,
-      });
-      const user = await getCurrentUser(tokenData.access_token);
-      return { token: tokenData.access_token, user };
+      // After registration, don't auto-login - redirect to login page
+      // Return success without token/user so user is redirected to login
+      return { token: null, user: null };
     } catch (error: any) {
       return rejectWithValue(error.message || "Registration failed");
     }
@@ -120,9 +116,10 @@ const authSlice = createSlice({
       })
       .addCase(registerUser.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.user = action.payload.user;
-        state.token = action.payload.token;
-        state.isAuthenticated = true;
+        // Don't set user/token - registration success means redirect to login
+        state.user = null;
+        state.token = null;
+        state.isAuthenticated = false;
         state.error = null;
       })
       .addCase(registerUser.rejected, (state, action) => {

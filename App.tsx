@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
+import { Routes, Route, useNavigate, useLocation, Navigate, Link } from 'react-router-dom';
 import { RootState } from './store';
 import { logout, fetchCurrentUser } from './store/slices/authSlice';
 import TrainingStudio from './views/TrainingStudio';
@@ -13,30 +14,34 @@ import { Mic2, LayoutDashboard, Users, BookOpen, Settings, LogOut, BarChart3, Us
 
 const App: React.FC = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const location = useLocation();
   const { isAuthenticated, user, isLoading } = useSelector((state: RootState) => state.auth);
-  const [showRegister, setShowRegister] = useState(false);
-  const [showAuthModal, setShowAuthModal] = useState(false); // Control when to show login/register
-  const [activeTab, setActiveTab] = useState<'training' | 'dashboard' | 'progress' | 'admin' | 'user-management' | 'platform-monitoring'>('training');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  // Check if we're on login or register page
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/register';
+  
+  // Get current route for active state
+  const currentPath = location.pathname;
 
   useEffect(() => {
     // Try to fetch current user if token exists
     if (!isAuthenticated && localStorage.getItem('tarannum_auth_token')) {
-      dispatch(fetchCurrentUser());
+      dispatch(fetchCurrentUser() as any);
     }
   }, [dispatch, isAuthenticated]);
 
-  // Close auth modal when user becomes authenticated
+  // Redirect authenticated users away from login/register pages
   useEffect(() => {
-    if (isAuthenticated && showAuthModal) {
-      setShowAuthModal(false);
-      setShowRegister(false);
+    if (isAuthenticated && isAuthPage) {
+      navigate('/', { replace: true });
     }
-  }, [isAuthenticated, showAuthModal]);
+  }, [isAuthenticated, isAuthPage, navigate]);
 
   const handleLogout = () => {
     dispatch(logout());
-    setActiveTab('training');
+    navigate('/login');
   };
 
   if (isLoading) {
@@ -51,8 +56,9 @@ const App: React.FC = () => {
 
   return (
     <div className="flex min-h-screen bg-slate-50 font-sans text-slate-900">
-
-      {/* Sidebar */}
+      {/* Sidebar - Hide on auth pages */}
+      {!isAuthPage && (
+        <>
       <aside className="w-64 bg-slate-900 text-white fixed h-full hidden md:flex flex-col z-20">
         <div className="p-6 border-b border-slate-800">
           <div className="flex items-center gap-3">
@@ -69,38 +75,38 @@ const App: React.FC = () => {
         </div>
 
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-          <button
-            onClick={() => setActiveTab('training')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'training' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+          <Link
+            to="/"
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${(currentPath === '/' || currentPath === '/training') ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
           >
             <Mic2 size={20} />
             <span className="font-medium">
               {isAuthenticated ? "Training Studio" : "Training (Demo)"}
             </span>
-          </button>
+          </Link>
 
           {/* Student-specific tabs */}
           {userRole === 'student' && (
             <>
-              <button
-                onClick={() => setActiveTab('progress')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'progress' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+              <Link
+                to="/progress"
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${currentPath === '/progress' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
               >
                 <BarChart3 size={20} />
                 <span className="font-medium">My Progress</span>
-              </button>
+              </Link>
             </>
           )}
 
           {/* Qari-specific tabs */}
           {userRole === 'qari' && (
-            <button
-              onClick={() => setActiveTab('dashboard')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'dashboard' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+            <Link
+              to="/dashboard"
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${currentPath === '/dashboard' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
             >
               <LayoutDashboard size={20} />
               <span className="font-medium">My Dashboard</span>
-            </button>
+            </Link>
           )}
 
           {/* Admin tabs */}
@@ -109,27 +115,27 @@ const App: React.FC = () => {
               <div className="pt-8 pb-2 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 Admin
               </div>
-              <button
-                onClick={() => setActiveTab('admin')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'admin' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+              <Link
+                to="/admin/presets"
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${currentPath === '/admin/presets' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
               >
                 <BookOpen size={20} />
                 <span className="font-medium">Preset Manager</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('user-management')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'user-management' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+              </Link>
+              <Link
+                to="/admin/users"
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${currentPath === '/admin/users' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
               >
                 <Users size={20} />
                 <span className="font-medium">User Management</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('platform-monitoring')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'platform-monitoring' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+              </Link>
+              <Link
+                to="/admin/monitoring"
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${currentPath === '/admin/monitoring' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
               >
                 <Monitor size={20} />
                 <span className="font-medium">Platform Monitoring</span>
-              </button>
+              </Link>
             </>
           )}
         </nav>
@@ -156,20 +162,14 @@ const App: React.FC = () => {
                 You are in demo mode.{" "}
                 <button
                   className="text-emerald-400 hover:text-emerald-300 underline"
-                  onClick={() => {
-                    setShowRegister(false);
-                    setShowAuthModal(true);
-                  }}
+                  onClick={() => navigate('/login')}
                 >
                   Login
                 </button>{" "}
                 or{" "}
                 <button
                   className="text-emerald-400 hover:text-emerald-300 underline"
-                  onClick={() => {
-                    setShowRegister(true);
-                    setShowAuthModal(true);
-                  }}
+                  onClick={() => navigate('/register')}
                 >
                   Register
                 </button>{" "}
@@ -179,6 +179,8 @@ const App: React.FC = () => {
           )}
         </div>
       </aside>
+        </>
+      )}
 
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
@@ -188,7 +190,8 @@ const App: React.FC = () => {
         />
       )}
 
-      {/* Mobile Sidebar */}
+      {/* Mobile Sidebar - Hide on auth pages */}
+      {!isAuthPage && (
       <aside className={`fixed top-0 left-0 h-full w-64 bg-slate-900 text-white z-50 transform transition-transform duration-300 ease-in-out md:hidden ${
         mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
       }`}>
@@ -213,13 +216,11 @@ const App: React.FC = () => {
         </div>
 
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-          <button
-            onClick={() => {
-              setActiveTab('training');
-              setMobileMenuOpen(false);
-            }}
+          <Link
+            to="/"
+            onClick={() => setMobileMenuOpen(false)}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-              activeTab === 'training' 
+              (currentPath === '/' || currentPath === '/training')
                 ? 'bg-emerald-600 text-white shadow-lg' 
                 : 'text-slate-400 hover:bg-slate-800 hover:text-white'
             }`}
@@ -228,40 +229,36 @@ const App: React.FC = () => {
             <span className="font-medium">
               {isAuthenticated ? "Training Studio" : "Training (Demo)"}
             </span>
-          </button>
+          </Link>
 
           {userRole === 'student' && (
-            <button
-              onClick={() => {
-                setActiveTab('progress');
-                setMobileMenuOpen(false);
-              }}
+            <Link
+              to="/progress"
+              onClick={() => setMobileMenuOpen(false)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                activeTab === 'progress' 
+                currentPath === '/progress'
                   ? 'bg-emerald-600 text-white shadow-lg' 
                   : 'text-slate-400 hover:bg-slate-800 hover:text-white'
               }`}
             >
               <BarChart3 size={20} />
               <span className="font-medium">My Progress</span>
-            </button>
+            </Link>
           )}
 
           {userRole === 'qari' && (
-            <button
-              onClick={() => {
-                setActiveTab('dashboard');
-                setMobileMenuOpen(false);
-              }}
+            <Link
+              to="/dashboard"
+              onClick={() => setMobileMenuOpen(false)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                activeTab === 'dashboard' 
+                currentPath === '/dashboard'
                   ? 'bg-emerald-600 text-white shadow-lg' 
                   : 'text-slate-400 hover:bg-slate-800 hover:text-white'
               }`}
             >
               <LayoutDashboard size={20} />
               <span className="font-medium">My Dashboard</span>
-            </button>
+            </Link>
           )}
 
           {userRole === 'admin' && (
@@ -269,48 +266,42 @@ const App: React.FC = () => {
               <div className="pt-8 pb-2 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 Admin
               </div>
-              <button
-                onClick={() => {
-                  setActiveTab('admin');
-                  setMobileMenuOpen(false);
-                }}
+              <Link
+                to="/admin/presets"
+                onClick={() => setMobileMenuOpen(false)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                  activeTab === 'admin' 
+                  currentPath === '/admin/presets'
                     ? 'bg-emerald-600 text-white shadow-lg' 
                     : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                 }`}
               >
                 <BookOpen size={20} />
                 <span className="font-medium">Preset Manager</span>
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab('user-management');
-                  setMobileMenuOpen(false);
-                }}
+              </Link>
+              <Link
+                to="/admin/users"
+                onClick={() => setMobileMenuOpen(false)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                  activeTab === 'user-management' 
+                  currentPath === '/admin/users'
                     ? 'bg-emerald-600 text-white shadow-lg' 
                     : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                 }`}
               >
                 <Users size={20} />
                 <span className="font-medium">User Management</span>
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab('platform-monitoring');
-                  setMobileMenuOpen(false);
-                }}
+              </Link>
+              <Link
+                to="/admin/monitoring"
+                onClick={() => setMobileMenuOpen(false)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                  activeTab === 'platform-monitoring' 
+                  currentPath === '/admin/monitoring'
                     ? 'bg-emerald-600 text-white shadow-lg' 
                     : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                 }`}
               >
                 <Monitor size={20} />
                 <span className="font-medium">Platform Monitoring</span>
-              </button>
+              </Link>
             </>
           )}
         </nav>
@@ -340,8 +331,7 @@ const App: React.FC = () => {
                 <button
                   className="text-emerald-400 hover:text-emerald-300 underline"
                   onClick={() => {
-                    setShowRegister(false);
-                    setShowAuthModal(true);
+                    navigate('/login');
                     setMobileMenuOpen(false);
                   }}
                 >
@@ -351,8 +341,7 @@ const App: React.FC = () => {
                 <button
                   className="text-emerald-400 hover:text-emerald-300 underline"
                   onClick={() => {
-                    setShowRegister(true);
-                    setShowAuthModal(true);
+                    navigate('/register');
                     setMobileMenuOpen(false);
                   }}
                 >
@@ -363,9 +352,12 @@ const App: React.FC = () => {
           )}
         </div>
       </aside>
+      )}
 
       {/* Main Content */}
-      <main className="flex-1 md:ml-64 relative">
+      <main className={`flex-1 ${!isAuthPage ? 'md:ml-64' : ''} relative`}>
+        {/* Header - Hide on auth pages */}
+        {!isAuthPage && (
         <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm px-4 md:px-6 py-3 md:py-4 flex items-center justify-between">
             <button
               onClick={() => setMobileMenuOpen(true)}
@@ -393,10 +385,7 @@ const App: React.FC = () => {
                   </span>
                   <button
                     className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition-colors shadow-sm hover:shadow-md"
-                    onClick={() => {
-                      setShowRegister(false);
-                      setShowAuthModal(true);
-                    }}
+                    onClick={() => navigate('/login')}
                   >
                     Login
                   </button>
@@ -404,94 +393,110 @@ const App: React.FC = () => {
               )}
             </div>
         </header>
+        )}
 
         <div className="min-h-[calc(100vh-64px)]">
-          {/* Show login/register when user clicks Login/Register - takes over main content */}
-          {!isAuthenticated && showAuthModal ? (
-            <>
-              {showRegister ? (
-                <Register
-                  onSwitchToLogin={() => setShowRegister(false)}
-                  onSuccess={() => {
-                    setShowRegister(false);
-                    setShowAuthModal(false);
-                  }}
-                  onClose={() => {
-                    setShowAuthModal(false);
-                    setShowRegister(false);
-                    setActiveTab('training');
-                  }}
-                />
-              ) : (
-                <Login
-                  onSwitchToRegister={() => setShowRegister(true)}
-                  onSuccess={() => {
-                    setShowRegister(false);
-                    setShowAuthModal(false);
-                  }}
-                  onClose={() => {
-                    setShowAuthModal(false);
-                    setShowRegister(false);
-                    setActiveTab('training');
-                  }}
-                />
-              )}
-            </>
-          ) : (
-            <>
-              {/* Training is always available (public demo or authenticated) */}
-              {activeTab === 'training' && !showAuthModal && (
-                <TrainingStudio />
-              )}
+          <Routes>
+            {/* Auth Routes */}
+            <Route 
+              path="/login" 
+              element={
+                !isAuthenticated ? (
+                  <Login
+                    onSwitchToRegister={() => navigate('/register')}
+                    onSuccess={() => navigate('/')}
+                  />
+                ) : (
+                  <Navigate to="/" replace />
+                )
+              } 
+            />
+            <Route 
+              path="/register" 
+              element={
+                !isAuthenticated ? (
+                  <Register
+                    onSwitchToLogin={() => navigate('/login')}
+                    onSuccess={() => navigate('/login')}
+                  />
+                ) : (
+                  <Navigate to="/" replace />
+                )
+              } 
+            />
 
-              {/* Authenticated-only views */}
-              {activeTab === 'progress' && isAuthenticated && userRole === 'student' && (
-                <StudentProgressView />
-              )}
-              {activeTab === 'dashboard' && isAuthenticated && userRole === 'qari' && (
-                <QariDashboard />
-              )}
-              {activeTab === 'admin' && isAuthenticated && userRole === 'admin' && (
-                <AdminMode view="presets" />
-              )}
-              {activeTab === 'user-management' && isAuthenticated && userRole === 'admin' && (
-                <AdminMode view="users" />
-              )}
-              {activeTab === 'platform-monitoring' && isAuthenticated && userRole === 'admin' && (
-                <AdminMode view="monitoring" />
-              )}
-
-              {/* Fallback message when trying to access restricted tabs in public mode */}
-              {activeTab !== 'training' && !isAuthenticated && !showAuthModal && (
-                <div className="p-8 text-center text-slate-500">
-                  <h2 className="text-2xl font-bold text-slate-800 mb-2">Restricted Area</h2>
-                  <p className="mb-4">
-                    This section is only available for registered users.
-                  </p>
-                  <div className="space-x-3">
-                    <button
-                      className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700"
-                      onClick={() => {
-                        setShowRegister(false);
-                        setShowAuthModal(true);
-                      }}
-                    >
-                      Login
-                    </button>
-                    <button
-                      className="px-4 py-2 rounded-lg bg-slate-800 text-white text-sm font-medium hover:bg-slate-900"
-                      onClick={() => {
-                        setShowRegister(true);
-                        setShowAuthModal(true);
-                      }}
-                    >
-                      Register
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
+            {/* Main App Routes */}
+            <Route 
+              path="/" 
+              element={<TrainingStudio />}
+            />
+            <Route 
+              path="/training" 
+              element={<TrainingStudio />}
+            />
+            
+            {/* Student Routes */}
+            <Route 
+              path="/progress" 
+              element={
+                isAuthenticated && userRole === 'student' ? (
+                  <StudentProgressView />
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
+            />
+            
+            {/* Qari Routes */}
+            <Route 
+              path="/dashboard" 
+              element={
+                isAuthenticated && userRole === 'qari' ? (
+                  <QariDashboard />
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
+            />
+            
+            {/* Admin Routes */}
+            <Route 
+              path="/admin/presets" 
+              element={
+                isAuthenticated && userRole === 'admin' ? (
+                  <AdminMode view="presets" />
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
+            />
+            <Route 
+              path="/admin/users" 
+              element={
+                isAuthenticated && userRole === 'admin' ? (
+                  <AdminMode view="users" />
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
+            />
+            <Route 
+              path="/admin/monitoring" 
+              element={
+                isAuthenticated && userRole === 'admin' ? (
+                  <AdminMode view="monitoring" />
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
+            />
+            
+            {/* Redirect unknown routes to home */}
+            <Route 
+              path="*" 
+              element={<Navigate to="/" replace />}
+            />
+          </Routes>
         </div>
       </main>
     </div>

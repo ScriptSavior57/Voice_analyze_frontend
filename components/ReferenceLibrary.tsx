@@ -34,7 +34,7 @@ const ReferenceLibrary: React.FC<ReferenceLibraryProps> = ({
         </option>
         {references.map((ref) => (
           <option key={ref.id} value={ref.id}>
-            {ref.title}
+            {ref.filename || ref.title}
           </option>
         ))}
       </select>

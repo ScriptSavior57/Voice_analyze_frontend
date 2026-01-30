@@ -16,6 +16,10 @@ export interface QariContent {
   reference_title?: string;
   reference_duration?: number;
   created_at?: string;
+  filename?: string;
+  file_path?: string;
+  duration?: number;
+  upload_date?: string;
 }
 
 export interface StudentInfo {
@@ -131,6 +135,35 @@ export const getQariContent = async (): Promise<{
 
   if (!response.ok) {
     throw new Error("Failed to get Qari content");
+  }
+
+  return response.json();
+};
+
+/**
+ * Qari: Update content metadata (surah/ayah settings)
+ */
+export const updateQariContent = async (
+  contentId: string,
+  content: {
+    surah_number?: number;
+    surah_name?: string;
+    ayah_number?: number;
+    maqam?: string;
+  }
+): Promise<{ success: boolean; content_id: string }> => {
+  const response = await fetch(`${API_URL}/api/platform/qari/content/${contentId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeader(),
+    },
+    body: JSON.stringify(content),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new Error(error.detail || "Failed to update content");
   }
 
   return response.json();

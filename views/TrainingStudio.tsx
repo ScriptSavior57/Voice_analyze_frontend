@@ -114,7 +114,7 @@ const convertRecordedAudioToWav = async (blob: Blob): Promise<Blob> => {
 const TrainingStudio: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth);
   const userRole = user?.role || 'public';
-  const [selectedRef, setSelectedRef] = useState<any>([]);
+  const [selectedRef, setSelectedRef] = useState<any>(null);
   const [studentBlob, setStudentBlob] = useState<Blob | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -215,9 +215,13 @@ const TrainingStudio: React.FC = () => {
 
   // Load progress on mount and when reference changes
   useEffect(() => {
-    const progress = progressService.getProgress(selectedRef.id);
-    setProgressData(progress);
-  }, [selectedRef.id, analysisResult]);
+    if (selectedRef && selectedRef.id) {
+      const progress = progressService.getProgress(selectedRef.id);
+      setProgressData(progress);
+    } else {
+      setProgressData(null);
+    }
+  }, [selectedRef?.id, analysisResult]);
 
   // Update student audio playback speed when it changes
   useEffect(() => {
@@ -309,101 +313,165 @@ const TrainingStudio: React.FC = () => {
             const { getAvailableContent } = await import("../services/platformService");
             const contentData = await getAvailableContent();
             if (contentData.content && contentData.content.length > 0) {
-              refs = contentData.content.map((item: any) => ({
+              console.log("[Student Load] Raw content data:", contentData.content);
+              
+              // Map content to references
+              const mappedRefs = contentData.content.map((item: any) => ({
                 id: item.reference_id || item.id,
                 title: item.title || item.reference_title || `Surah ${item.surah_number || 'N/A'}`,
                 maqam: item.maqam,
-                filename: item.title || item.reference_title || "",
+                filename: item.filename || item.title || item.reference_title || "",
                 file_path: item.file_path || "",
                 duration: item.duration || item.reference_duration || 0,
                 upload_date: item.upload_date || item.created_at || "",
                 file_size: item.file_size || 0,
                 is_preset: item.is_preset || false,
                 text_segments: item.text_segments || [],
+                created_at: item.created_at || item.upload_date || "", // For sorting
               }));
-            } else if (contentData.message) {
+              
+              console.log("[Student Load] Mapped references:", mappedRefs.map((r: any) => ({ 
+                id: r.id, 
+                filename: r.filename, 
+                upload_date: r.upload_date,
+                created_at: r.created_at 
+              })));
+              
+              // Sort by upload_date FIRST (actual file upload date), then created_at as fallback
+              // This ensures the latest uploaded file appears first, not when it was added to Qari's library
+              refs = mappedRefs.sort((a: any, b: any) => {
+                // Prioritize upload_date (file upload date) over created_at (QariContent creation date)
+                const dateA = a.upload_date 
+                  ? new Date(a.upload_date).getTime() 
+                  : (a.created_at ? new Date(a.created_at).getTime() : 0);
+                const dateB = b.upload_date 
+                  ? new Date(b.upload_date).getTime() 
+                  : (b.created_at ? new Date(b.created_at).getTime() : 0);
+                return dateB - dateA; // Descending order (newest first)
+              });
+              
+              console.log("[Student Load] Sorted references (latest first):", refs.map((r: any) => ({ 
+                id: r.id, 
+                filename: r.filename, 
+                upload_date: r.upload_date,
+                created_at: r.created_at 
+              })));
+            } else if (contentData.message && contentData.message.includes("No Qari assigned")) {
+              // Only show error if message explicitly says "No Qari assigned"
               setReferenceLibraryError(contentData.message);
+            } else {
+              // Clear error if we have a Qari assigned (even if no content yet)
+              setReferenceLibraryError(null);
             }
           } catch (err: any) {
-            setReferenceLibraryError(err.message || "Failed to load content. Please select a Qari.");
+            // Only set error if it's explicitly about missing Qari
+            if (err.message?.includes("No Qari assigned") || err.message?.includes("select a Qari")) {
+              setReferenceLibraryError(err.message);
+            } else {
+              // For other errors, don't show the "select Qari" message
+              setReferenceLibraryError(null);
+            }
           }
         } else {
           // Qari and Admin: use regular library service
-          const cached = referenceLibraryService.getCachedReferences();
-          if (cached && cached.length > 0) {
-            setReferenceLibrary(cached);
-          }
+          // Clear cache to ensure we get fresh data (latest uploads)
+          referenceLibraryService.clearCache();
           refs = await referenceLibraryService.getReferences();
+          // Sort by upload_date (latest first) to ensure newest files appear first
+          refs.sort((a: any, b: any) => {
+            const dateA = a.upload_date ? new Date(a.upload_date).getTime() : 0;
+            const dateB = b.upload_date ? new Date(b.upload_date).getTime() : 0;
+            return dateB - dateA; // Descending order (newest first)
+          });
           referenceLibraryService.cacheReferences(refs);
         }
         
         setReferenceLibrary(refs);
 
-        // If no reference selected yet and we have library entries, pick first
-        if ((!selectedRef || !selectedRef.id || Array.isArray(selectedRef)) && refs.length > 0) {
-          const first = refs[0];
-          // Get authenticated blob URL for audio elements
-          try {
-            const url = await referenceLibraryService.getReferenceAudioBlobUrl(first.id);
+        // For Admin, Qari, and Students: Always select the latest uploaded file on load/refresh
+        // This ensures latest content is shown after refresh or Qari change
+        const shouldAutoSelect = (userRole === 'admin' || userRole === 'qari' || userRole === 'student') 
+          ? refs.length > 0  // Always select latest for Admin/Qari/Student
+          : ((!selectedRef || !selectedRef.id || Array.isArray(selectedRef)) && refs.length > 0);  // Only if not selected for public users
+        
+        if (shouldAutoSelect) {
+          const first = refs[0]; // This is the latest uploaded file (sorted by upload_date)
+              console.log(`[${userRole} Load] Auto-selecting latest file:`, first.id, first.title, "created_at:", first.created_at);
+          
+          // For students, always update to latest file (even if same ID, to ensure fresh data)
+          // For others, only update if it's different from current selection
+          // Note: selectedRef might be null or array (legacy), so we check for that too
+          const isSelectedRefEmpty = !selectedRef || Array.isArray(selectedRef) || !selectedRef.id;
+          const shouldUpdate = (userRole === 'student') 
+            ? true  // Always update for students to ensure latest file is loaded
+            : (isSelectedRefEmpty || (selectedRef?.id && selectedRef.id !== first.id));
+          
+          if (shouldUpdate) {
+            console.log(`[${userRole} Load] Updating selected reference to latest (current: ${selectedRef?.id || 'none'}, new: ${first.id})`);
+            // Get authenticated blob URL for audio elements
+            try {
+              const url = await referenceLibraryService.getReferenceAudioBlobUrl(first.id);
+              console.log(`[${userRole} Load] Got blob URL for reference:`, first.id);
 
-            // Set selectedRef with all properties including is_preset and text_segments
-            const selectedRefData = {
-              id: first.id,
-              title: first.title,
-              url,
-              duration: first.duration || 0,
-              maqam: first.maqam || "Library",
-              is_preset: first.is_preset || false,
-              text_segments: first.text_segments || [],
-            };
-
-            setSelectedRef(selectedRefData);
-          } catch (error) {
-            console.error("Failed to load reference audio:", error);
-            // Fallback to regular URL (may not work without auth, but better than nothing)
-            const url = referenceLibraryService.getReferenceAudioUrl(first.id);
-            setSelectedRef({
-              id: first.id,
-              title: first.title,
-              url,
-              duration: first.duration || 0,
-              maqam: first.maqam || "Library",
-              is_preset: first.is_preset || false,
-              text_segments: first.text_segments || [],
-            });
-          }
-
-          // Check if this is a preset with text_segments and load them
-          if (first.is_preset && first.text_segments && first.text_segments.length > 0) {
-            console.log(`[InitialLoad] Loading preset text_segments for: ${first.title}`, first.text_segments);
-
-            // Convert text_segments to ayatTiming format
-            const presetTextSegments = first.text_segments.map((seg: any) => {
-              const textValue = seg.text || seg.text_content || '';
-              return {
-                text: textValue,
-                start: seg.start || 0,
-                end: seg.end || 0,
+              // Set selectedRef with all properties including is_preset and text_segments
+              const selectedRefData = {
+                id: first.id,
+                title: first.title,
+                url,
+                duration: first.duration || 0,
+                maqam: first.maqam || "Library",
+                is_preset: first.is_preset || false,
+                text_segments: first.text_segments || [],
               };
-            });
 
-            // Store in ref for useEffect to check
-            presetTextSegmentsRef.current = presetTextSegments;
+              setSelectedRef(selectedRefData);
+            } catch (error) {
+              console.error("Failed to load reference audio:", error);
+              // Fallback to regular URL (may not work without auth, but better than nothing)
+              const url = referenceLibraryService.getReferenceAudioUrl(first.id);
+              setSelectedRef({
+                id: first.id,
+                title: first.title,
+                url,
+                duration: first.duration || 0,
+                maqam: first.maqam || "Library",
+                is_preset: first.is_preset || false,
+                text_segments: first.text_segments || [],
+              });
+            }
 
-            // Count segments with actual text
-            const segmentsWithText = presetTextSegments.filter((seg: any) => seg.text && seg.text.trim() !== '').length;
-            console.log(`✅ [InitialLoad] Set preset text segments: ${presetTextSegments.length} total, ${segmentsWithText} with text`, presetTextSegments);
+            // Check if this is a preset with text_segments and load them
+            if (first.is_preset && first.text_segments && first.text_segments.length > 0) {
+              console.log(`[InitialLoad] Loading preset text_segments for: ${first.title}`, first.text_segments);
 
-            // Set timing - use setTimeout to ensure it runs after any clearing effects
-            setTimeout(() => {
-              setReferenceAyahTiming(presetTextSegments);
-              console.log(`✅ [InitialLoad] referenceAyahTiming set with ${presetTextSegments.length} segments`);
-            }, 100);
-          } else {
-            // Not a preset or no text segments - clear text
-            presetTextSegmentsRef.current = null;
-            setReferenceAyahTiming([]);
-            console.log(`[InitialLoad] Reference "${first.title}" is not a preset or has no text segments`);
+              // Convert text_segments to ayatTiming format
+              const presetTextSegments = first.text_segments.map((seg: any) => {
+                const textValue = seg.text || seg.text_content || '';
+                return {
+                  text: textValue,
+                  start: seg.start || 0,
+                  end: seg.end || 0,
+                };
+              });
+
+              // Store in ref for useEffect to check
+              presetTextSegmentsRef.current = presetTextSegments;
+
+              // Count segments with actual text
+              const segmentsWithText = presetTextSegments.filter((seg: any) => seg.text && seg.text.trim() !== '').length;
+              console.log(`✅ [InitialLoad] Set preset text segments: ${presetTextSegments.length} total, ${segmentsWithText} with text`, presetTextSegments);
+
+              // Set timing - use setTimeout to ensure it runs after any clearing effects
+              setTimeout(() => {
+                setReferenceAyahTiming(presetTextSegments);
+                console.log(`✅ [InitialLoad] referenceAyahTiming set with ${presetTextSegments.length} segments`);
+              }, 100);
+            } else {
+              // Not a preset or no text segments - clear text
+              presetTextSegmentsRef.current = null;
+              setReferenceAyahTiming([]);
+              console.log(`[InitialLoad] Reference "${first.title}" is not a preset or has no text segments`);
+            }
           }
         }
       } catch (error: any) {
@@ -418,7 +486,7 @@ const TrainingStudio: React.FC = () => {
 
     loadReferences();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [user?.id]); // Re-run when user changes (login/logout)
 
   // Calculate reference duration from pitch data AND audio duration
   useEffect(() => {
@@ -519,7 +587,7 @@ const TrainingStudio: React.FC = () => {
       pitchDataRefIdRef.current = undefined; // Clear ref ID so old graph is immediately hidden
       setIsExtractingRefPitch(true);
 
-      if (!selectedRef.url && !uploadedRefUrl) {
+      if ((!selectedRef || !selectedRef.url) && !uploadedRefUrl) {
         console.log("⚠️ No URL available - stopping extraction");
         setIsExtractingRefPitch(false);
         return;
@@ -602,7 +670,7 @@ const TrainingStudio: React.FC = () => {
 
         let pitchData: PitchDataResponse;
 
-        if (isLibraryReference) {
+        if (isLibraryReference && selectedRef?.id) {
           // Use reference_id - extracts pitch from backend-stored file
           console.log(
             `Using reference_id for pitch extraction: ${selectedRef.id}`
@@ -620,7 +688,7 @@ const TrainingStudio: React.FC = () => {
           );
 
           console.log("✅ extractReferencePitch completed - received", pitchData.reference?.length || 0, "pitch points");
-        } else {
+        } else if (selectedRef) {
           // Fallback: fetch blob and extract (for custom uploads)
           const url =
             selectedRef.id === "custom" && uploadedRefUrl
@@ -644,8 +712,12 @@ const TrainingStudio: React.FC = () => {
           // Extract pitch using backend (accurate)
           pitchData = await extractReferencePitch(
             refBlob,
-            `reference_${selectedRef.id}.mp3`
+            `reference_${selectedRef.id || 'custom'}.mp3`
           );
+        } else {
+          // No selectedRef - cannot extract
+          setIsExtractingRefPitch(false);
+          return;
         }
 
         const extractedReferencePitch = pitchData.reference || [];
@@ -664,8 +736,8 @@ const TrainingStudio: React.FC = () => {
 
         // Extract text timing if available
         // BUT: Don't overwrite preset text_segments if they already exist
-        const isPresetWithText = (selectedRef.is_preset &&
-          selectedRef.text_segments &&
+        const isPresetWithText = (selectedRef?.is_preset &&
+          selectedRef?.text_segments &&
           Array.isArray(selectedRef.text_segments) &&
           selectedRef.text_segments.length > 0) ||
           (presetTextSegmentsRef.current && presetTextSegmentsRef.current.length > 0);
@@ -779,7 +851,7 @@ const TrainingStudio: React.FC = () => {
     };
 
     extractRefPitch();
-  }, [selectedRef.url, uploadedRefUrl, selectedRef.id, referenceLibrary]);
+  }, [selectedRef?.url, uploadedRefUrl, selectedRef?.id, referenceLibrary]);
 
   // Note: Practice mode now starts manually via "Start Practice" button only
 
@@ -1505,7 +1577,7 @@ const TrainingStudio: React.FC = () => {
       if (isLibraryReference) {
         // Use reference_id to reuse saved reference audio without re-uploading
         referenceId = selectedRef.id;
-      } else {
+      } else if (selectedRef) {
         // Fallback: fetch reference audio blob (custom upload or legacy mode)
         const urlToFetch =
           selectedRef.id === "custom" && uploadedRefUrl
@@ -1550,7 +1622,7 @@ const TrainingStudio: React.FC = () => {
         // Clear local cache and reset selection so the user can pick a valid reference.
         referenceLibraryService.clearCache();
         setReferenceLibrary([]);
-        setSelectedRef([]);
+        setSelectedRef(null);
         setReferenceLibraryError(
           "The previously selected reference is no longer available. Please upload or select a new reference."
         );
@@ -1878,15 +1950,82 @@ const TrainingStudio: React.FC = () => {
 
       console.log("Reference saved to library:", savedReference);
 
-      // Refresh library list
+      // Refresh library list - wait a moment for backend to process
       try {
-        const cached = referenceLibraryService.getCachedReferences();
-        if (cached) {
-          setReferenceLibrary(cached);
+        // Clear cache first
+        referenceLibraryService.clearCache();
+        
+        // Retry mechanism: backend might need a moment to process the upload
+        let refs: any[] = [];
+        let retries = 0;
+        const maxRetries = 3;
+        const uploadedRefId = savedReference.id;
+        
+        while (retries < maxRetries) {
+          // Wait before retrying (increasing delay)
+          if (retries > 0) {
+            await new Promise(resolve => setTimeout(resolve, 500 * retries));
+          }
+          
+          // Fetch references
+          refs = await referenceLibraryService.getReferences();
+          
+          // Check if the uploaded file is in the list
+          const foundUploadedFile = refs.find((r: any) => r.id === uploadedRefId);
+          
+          if (foundUploadedFile || retries === maxRetries - 1) {
+            // Found the file or this is the last retry - proceed
+            break;
+          }
+          
+          retries++;
+          console.log(`[Upload] Uploaded file not found yet, retry ${retries}/${maxRetries}...`);
         }
-        const refs = await referenceLibraryService.getReferences();
+        
+        // Sort by upload_date (latest first) to ensure newest files appear first
+        refs.sort((a: any, b: any) => {
+          const dateA = a.upload_date ? new Date(a.upload_date).getTime() : 0;
+          const dateB = b.upload_date ? new Date(b.upload_date).getTime() : 0;
+          return dateB - dateA; // Descending order (newest first)
+        });
+        
         referenceLibraryService.cacheReferences(refs);
-        setReferenceLibrary(refs);
+        // Force state update by creating a new array reference
+        setReferenceLibrary([...refs]);
+        
+        console.log(`[Upload] Refreshed library with ${refs.length} references (latest: ${refs[0]?.filename || refs[0]?.title || 'none'})`);
+        
+        // Auto-select the latest file after upload
+        if (refs.length > 0) {
+          const latestRef = refs[0];
+          try {
+            const url = await referenceLibraryService.getReferenceAudioBlobUrl(latestRef.id);
+            setSelectedRef({
+              id: latestRef.id,
+              title: latestRef.title,
+              url,
+              duration: latestRef.duration || 0,
+              maqam: latestRef.maqam || "Library",
+              is_preset: latestRef.is_preset || false,
+              text_segments: latestRef.text_segments || [],
+              ...latestRef,
+            });
+          } catch (error) {
+            console.error("Failed to load reference audio:", error);
+            const url = referenceLibraryService.getReferenceAudioUrl(latestRef.id);
+            setSelectedRef({
+              id: latestRef.id,
+              title: latestRef.title,
+              url,
+              duration: latestRef.duration || 0,
+              maqam: latestRef.maqam || "Library",
+              is_preset: latestRef.is_preset || false,
+              text_segments: latestRef.text_segments || [],
+              ...latestRef,
+            });
+          }
+        }
+        
         setReferenceLibraryError(null);
       } catch (err) {
         console.error("Failed to refresh library:", err);
@@ -1964,48 +2103,162 @@ const TrainingStudio: React.FC = () => {
           <div className="mb-6">
             <QariSelector
               onQariSelected={async () => {
+                // Set loading state immediately
+                setIsLoadingReferences(true);
+                setReferenceLibraryError(null);
+                // Clear current selection while loading (use null instead of [])
+                setSelectedRef(null);
+                setReferenceLibrary([]);
+                
+                // Also clear pitch data and analysis
+                setReferencePitchData([]);
+                setAnalysisResult(null);
+                setStudentBlob(null);
+                pitchDataRefIdRef.current = undefined;
+                
+                // Retry mechanism to ensure backend has processed the Qari assignment
+                const { getAvailableContent } = await import("../services/platformService");
+                let contentData = null;
+                let retries = 0;
+                const maxRetries = 3;
+                
+                while (retries < maxRetries && !contentData?.content) {
+                  // Wait a bit before retrying (increasing delay)
+                  if (retries > 0) {
+                    await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+                  }
+                  
+                  try {
+                    contentData = await getAvailableContent();
+                    
+                    // If we got content or a clear message, break
+                    if (contentData.content || contentData.message) {
+                      break;
+                    }
+                  } catch (err) {
+                    console.warn(`Attempt ${retries + 1} failed:`, err);
+                  }
+                  
+                  retries++;
+                }
+                
                 // Reload references after Qari selection
                 try {
-                  const { getAvailableContent } = await import("../services/platformService");
-                  const contentData = await getAvailableContent();
+                  if (!contentData) {
+                    contentData = await getAvailableContent();
+                  }
+                  
+                  console.log("[Qari Change] Content loaded:", contentData);
+                  
+                  // Clear error if we have a Qari assigned (even if no content yet)
+                  if (contentData.qari || !contentData.message) {
+                    setReferenceLibraryError(null);
+                  }
+                  
                   if (contentData.content && contentData.content.length > 0) {
-                    const refs = contentData.content.map((item) => ({
-                      id: item.reference_id,
-                      title: item.reference_title || `Surah ${item.surah_number || 'N/A'}`,
+                    console.log(`[Qari Change] Found ${contentData.content.length} content items`);
+                    // Map and sort by latest upload date (newest first)
+                    const mappedRefs = contentData.content.map((item: any) => ({
+                      id: item.reference_id || item.id,
+                      title: item.reference_title || item.title || `Surah ${item.surah_number || 'N/A'}`,
                       maqam: item.maqam,
-                      filename: item.reference_title || "",
-                      file_path: "",
-                      duration: item.reference_duration || 0,
-                      upload_date: item.created_at || "",
-                      file_size: 0,
-                      is_preset: false,
+                      filename: item.filename || item.reference_title || item.title || "",
+                      file_path: item.file_path || "",
+                      duration: item.reference_duration || item.duration || 0,
+                      upload_date: item.upload_date || item.created_at || "",
+                      file_size: item.file_size || 0,
+                      is_preset: item.is_preset || false,
+                      text_segments: item.text_segments || [],
+                      created_at: item.created_at || item.upload_date || "",
                     }));
+                    
+                    // Sort by upload_date FIRST (actual file upload date), then created_at as fallback
+                    // This ensures the latest uploaded file appears first, not when it was added to Qari's library
+                    const refs = mappedRefs.sort((a: any, b: any) => {
+                      // Prioritize upload_date (file upload date) over created_at (QariContent creation date)
+                      const dateA = a.upload_date 
+                        ? new Date(a.upload_date).getTime() 
+                        : (a.created_at ? new Date(a.created_at).getTime() : 0);
+                      const dateB = b.upload_date 
+                        ? new Date(b.upload_date).getTime() 
+                        : (b.created_at ? new Date(b.created_at).getTime() : 0);
+                      return dateB - dateA; // Descending order (newest first)
+                    });
+                    
+                    console.log("[Qari Change] Sorted references (latest first):", refs.map((r: any) => ({ 
+                      id: r.id, 
+                      filename: r.filename,
+                      upload_date: r.upload_date,
+                      created_at: r.created_at 
+                    })));
+                    
+                    // Update reference library
                     setReferenceLibrary(refs);
+                    
+                    // Always select the latest file (first in sorted array)
                     if (refs.length > 0) {
+                      const latestRef = refs[0];
+                      console.log("[Qari Change] Auto-selecting latest reference:", latestRef.id, latestRef.filename || latestRef.title);
+                      
+                      // Set extraction state to show "Extracting..." immediately
+                      setIsExtractingRefPitch(true);
+                      setReferencePitchData([]);
+                      pitchDataRefIdRef.current = undefined;
+                      
                       // Get authenticated blob URL for audio elements
                       try {
-                        const url = await referenceLibraryService.getReferenceAudioBlobUrl(refs[0].id);
+                        const url = await referenceLibraryService.getReferenceAudioBlobUrl(latestRef.id);
+                        console.log("[Qari Change] Got blob URL for reference:", latestRef.id);
+                        
+                        // Set selected reference with all properties
                         setSelectedRef({
-                          id: refs[0].id,
-                          title: refs[0].title,
+                          id: latestRef.id,
+                          title: latestRef.title,
+                          filename: latestRef.filename,
                           url,
-                          ...refs[0],
+                          duration: latestRef.duration || 0,
+                          maqam: latestRef.maqam || "Library",
+                          is_preset: latestRef.is_preset || false,
+                          text_segments: latestRef.text_segments || [],
+                          upload_date: latestRef.upload_date,
+                          ...latestRef,
                         });
+                        console.log("[Qari Change] Selected reference set:", latestRef.id);
                       } catch (error) {
-                        console.error("Failed to load reference audio:", error);
+                        console.error("[Qari Change] Failed to load reference audio:", error);
                         // Fallback to regular URL
-                        const url = referenceLibraryService.getReferenceAudioUrl(refs[0].id);
+                        const url = referenceLibraryService.getReferenceAudioUrl(latestRef.id);
                         setSelectedRef({
-                          id: refs[0].id,
-                          title: refs[0].title,
+                          id: latestRef.id,
+                          title: latestRef.title,
+                          filename: latestRef.filename,
                           url,
-                          ...refs[0],
+                          duration: latestRef.duration || 0,
+                          maqam: latestRef.maqam || "Library",
+                          is_preset: latestRef.is_preset || false,
+                          text_segments: latestRef.text_segments || [],
+                          upload_date: latestRef.upload_date,
+                          ...latestRef,
                         });
                       }
+                    } else {
+                      console.log("[Qari Change] No references found after mapping");
+                      setSelectedRef(null);
                     }
+                  } else {
+                    console.log("[Qari Change] No content in response:", contentData);
+                    // Qari selected but no content yet - clear error, show empty library
+                    setReferenceLibrary([]);
+                    setSelectedRef(null);
+                    setReferenceLibraryError(null);
                   }
-                } catch (err) {
-                  console.error("Failed to reload content:", err);
+                } catch (err: any) {
+                  console.error("[Qari Change] Failed to reload content:", err);
+                  setReferenceLibraryError(err.message || "Failed to load Qari content");
+                  setSelectedRef(null);
+                } finally {
+                  // Always clear loading state
+                  setIsLoadingReferences(false);
                 }
               }}
             />
@@ -2016,7 +2269,7 @@ const TrainingStudio: React.FC = () => {
           {/* Reference Library Selector */}
           <ReferenceLibrary
             references={referenceLibrary}
-            selectedId={selectedRef.id === "custom" ? "" : selectedRef.id}
+            selectedId={selectedRef?.id === "custom" ? "" : (selectedRef?.id || "")}
             onSelect={async (id) => {
               if (!id) return;
               const ref = referenceLibrary.find((r) => r.id === id);
@@ -2142,9 +2395,11 @@ const TrainingStudio: React.FC = () => {
                 Reference Audio
               </h2>
               <div className='flex items-center gap-2'>
-                <span className='text-xs font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full'>
-                  {selectedRef.maqam}
-                </span>
+                {selectedRef?.maqam && (
+                  <span className='text-xs font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full'>
+                    {selectedRef.maqam}
+                  </span>
+                )}
               </div>
             </div>
             <div className='bg-slate-50 p-6 rounded-xl border border-slate-200 shadow-inner'>
@@ -2173,9 +2428,9 @@ const TrainingStudio: React.FC = () => {
                   <div className='hidden'>
                     <Waveform
                       url={
-                        selectedRef.id === "custom" && uploadedRefUrl
+                        selectedRef?.id === "custom" && uploadedRefUrl
                           ? uploadedRefUrl
-                          : selectedRef.url
+                          : (selectedRef?.url || "")
                       }
                       height={1}
                       waveColor='#94a3b8'
@@ -2391,9 +2646,9 @@ const TrainingStudio: React.FC = () => {
                       }
                       referenceDuration={referenceDuration}
                       referenceAudioUrl={
-                        selectedRef.id === "custom" && uploadedRefUrl
+                        selectedRef?.id === "custom" && uploadedRefUrl
                           ? uploadedRefUrl
-                          : selectedRef.url
+                          : (selectedRef?.url || "")
                       }
                       studentAudioUrl={practiceAudioUrl}
                       studentAudioBlob={
@@ -2631,9 +2886,9 @@ const TrainingStudio: React.FC = () => {
               ) : (
                 <Waveform
                   url={
-                    selectedRef.id === "custom" && uploadedRefUrl
+                    selectedRef?.id === "custom" && uploadedRefUrl
                       ? uploadedRefUrl
-                      : selectedRef.url
+                      : (selectedRef?.url || "")
                   }
                   height={120}
                   waveColor='#94a3b8'
@@ -3816,9 +4071,9 @@ const TrainingStudio: React.FC = () => {
                 <div className='mt-6 pt-6 border-t border-slate-200'>
                   <SegmentPractice
                     referenceUrl={
-                      selectedRef.id === "custom" && uploadedRefUrl
+                      selectedRef?.id === "custom" && uploadedRefUrl
                         ? uploadedRefUrl
-                        : selectedRef.url
+                        : (selectedRef?.url || "")
                     }
                     studentBlob={studentBlob!}
                     segments={analysisResult.segments.map((s) => ({
@@ -3929,16 +4184,16 @@ const TrainingStudio: React.FC = () => {
         onStopPracticeAudio={handleStopPracticeAudio}
         ayatTiming={
           // Only show text if it's a preset (not from analysis result for custom uploads)
-          selectedRef.is_preset && referenceAyahTiming.length > 0
+          selectedRef?.is_preset && referenceAyahTiming.length > 0
             ? referenceAyahTiming
             : []
         }
         onSeekToTime={handleFullScreenSeekToTime}
         markers={analysisResult?.pitchData?.markers || []}
         referenceUrl={
-          selectedRef.id === "custom" && uploadedRefUrl
+          selectedRef?.id === "custom" && uploadedRefUrl
             ? uploadedRefUrl
-            : selectedRef.url
+            : (selectedRef?.url || "")
         }
         studentBlob={studentBlob}
       />
