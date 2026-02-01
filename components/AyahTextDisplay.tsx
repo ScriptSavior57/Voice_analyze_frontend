@@ -46,6 +46,14 @@ const AyahTextDisplay: React.FC<AyahTextDisplayProps> = ({
     (ayah) => currentTime >= ayah.start && currentTime < ayah.end
   );
 
+  // Reverse the array for display (so admin1_2 appears on left, admin1_1 on right)
+  const reversedAyatTiming = [...sortedAyatTiming].reverse();
+
+  // Calculate active index in reversed array
+  const reversedActiveIndex = activeSegmentIndex >= 0 
+    ? reversedAyatTiming.length - 1 - activeSegmentIndex 
+    : -1;
+
   const handleSegmentClick = (ayah: AyahTiming) => {
     if (onSeek) {
       onSeek(ayah.start);
@@ -82,8 +90,8 @@ const AyahTextDisplay: React.FC<AyahTextDisplayProps> = ({
           direction: "ltr", // Explicit LTR for button layout order
         }}
       >
-        {sortedAyatTiming.map((ayah, index) => {
-          const isActive = index === activeSegmentIndex;
+        {reversedAyatTiming.map((ayah, index) => {
+          const isActive = index === reversedActiveIndex;
           const isPast = currentTime >= ayah.end;
           const isFuture = currentTime < ayah.start;
           const hasText = ayah.text && ayah.text.trim() !== "";
