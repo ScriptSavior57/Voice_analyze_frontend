@@ -1163,41 +1163,42 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
       }
 
       // Draw current time cursor (blue vertical line) - shows during recording and playback
-      // Stop at 10.0 seconds instead of continuing across entire graph
-      // This provides better visual feedback for the first 10 seconds of practice
-      if (currentTime > 0 && currentTime <= 10.0 && baseMaxTime > 0) {
-        // Extend visible range slightly to show cursor near edges
-        const extendedMinTime =
-          minVisibleTime - (maxVisibleTime - minVisibleTime) * 0.1;
-        const extendedMaxTime =
-          maxVisibleTime + (maxVisibleTime - minVisibleTime) * 0.1;
-
-        if (currentTime >= extendedMinTime && currentTime <= extendedMaxTime) {
-          ctx.strokeStyle = "#3b82f6"; // Blue
-          ctx.lineWidth = 2.5;
-          const actualVisibleRange = maxVisibleTime - minVisibleTime;
-          const cursorX =
-            padding +
-            ((currentTime - minVisibleTime) / actualVisibleRange) * graphWidth;
-
-          // Clamp cursor to visible area
-          const clampedX = Math.max(
-            padding,
-            Math.min(displayWidth - padding, cursorX)
-          );
-
-          if (clampedX >= padding && clampedX <= displayWidth - padding) {
-            ctx.beginPath();
-            ctx.moveTo(clampedX, padding);
-            ctx.lineTo(clampedX, displayHeight - padding);
-            ctx.stroke();
-
-            // Add a small circle at the top of the cursor for better visibility
-            ctx.fillStyle = "#3b82f6";
-            ctx.beginPath();
-            ctx.arc(clampedX, padding, 4, 0, 2 * Math.PI);
-            ctx.fill();
-          }
+      // The line moves from start until it reaches the center of the visible viewport,
+      // then remains fixed at center while the graph scrolls, allowing future pitch data to appear on the right
+      if (currentTime > 0 && baseMaxTime > 0) {
+        ctx.strokeStyle = "#3b82f6"; // Blue
+        ctx.lineWidth = 2.5;
+        
+        const actualVisibleRange = maxVisibleTime - minVisibleTime;
+        const centerTime = (minVisibleTime + maxVisibleTime) / 2;
+        const centerX = padding + graphWidth / 2;
+        
+        let cursorX: number;
+        
+        // If currentTime hasn't reached center yet, move the line with currentTime
+        // Once currentTime reaches or passes center, keep the line fixed at center
+        if (currentTime < centerTime) {
+          // Line is still moving toward center
+          cursorX = padding + ((currentTime - minVisibleTime) / actualVisibleRange) * graphWidth;
+          // Clamp to not exceed center
+          cursorX = Math.min(cursorX, centerX);
+        } else {
+          // Line is fixed at center
+          cursorX = centerX;
+        }
+        
+        // Ensure cursor is within visible area
+        if (cursorX >= padding && cursorX <= displayWidth - padding) {
+          ctx.beginPath();
+          ctx.moveTo(cursorX, padding);
+          ctx.lineTo(cursorX, displayHeight - padding);
+          ctx.stroke();
+          
+          // Add a small circle at the top of the cursor for better visibility
+          ctx.fillStyle = "#3b82f6";
+          ctx.beginPath();
+          ctx.arc(cursorX, padding, 4, 0, 2 * Math.PI);
+          ctx.fill();
         }
       }
 
