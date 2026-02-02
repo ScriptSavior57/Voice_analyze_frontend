@@ -320,15 +320,12 @@ const QariContentEditor: React.FC = () => {
         </div>
 
         {/* Audio and Pitch Visualization */}
-        {referenceAudio && (
+        {content && content.reference_id && (
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            {loadingPitch || loadingAudio ? (
+            {loadingPitch || loadingAudio || !referenceAudio || !audioUrl ? (
               <div className="text-center py-12">
+                <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
                 <div className="text-slate-500">Loading audio and pitch data...</div>
-              </div>
-            ) : !audioUrl ? (
-              <div className="text-center py-12">
-                <div className="text-red-500">Failed to load audio. Please try again.</div>
               </div>
             ) : (
               <TextAlignmentEditor
