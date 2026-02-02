@@ -74,7 +74,7 @@ const AyahTextDisplay: React.FC<AyahTextDisplayProps> = ({
         Quranic Text
       </h4>
       <div
-        className='flex flex-wrap gap-2 items-center justify-start'
+        className='flex flex-wrap gap-2 items-center justify-center'
         role='group'
         aria-labelledby='ayah-text-heading'
         dir='rtl' // RTL direction so each row flows right-to-left
