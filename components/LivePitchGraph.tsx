@@ -255,7 +255,7 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
     }
   };
 
-  // Mouse wheel zoom - attach to document in fullscreen mode to bypass modal blocking
+  // Mouse wheel zoom - handles both regular and fullscreen modes
   useEffect(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
@@ -267,30 +267,34 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
       const mouseX = e.clientX;
       const mouseY = e.clientY;
       
-      // In fullscreen mode, skip bounds check - let the FullScreenTrainingMode handler handle it
-      // In regular mode, check bounds strictly
-      if (!isFullScreen) {
-        const tolerance = 10;
-        if (
-          mouseX < rect.left - tolerance ||
-          mouseX > rect.right + tolerance ||
-          mouseY < rect.top - tolerance ||
-          mouseY > rect.bottom + tolerance
-        ) {
-          return; // Mouse is outside canvas area, ignore
-        }
-      } else {
-        // In fullscreen, still check if mouse is roughly over the canvas area
-        // But be very lenient - the FullScreenTrainingMode handler is the primary one
-        const tolerance = 200; // Very large tolerance
-        if (
-          mouseX < rect.left - tolerance ||
-          mouseX > rect.right + tolerance ||
-          mouseY < rect.top - tolerance ||
-          mouseY > rect.bottom + tolerance
-        ) {
-          return; // Mouse is way outside canvas area, ignore
-        }
+      // CRITICAL: First check if mouse coordinates are within THIS component's canvas bounds
+      // This is the primary check to ensure each graph only processes events over its own area
+      const tolerance = isFullScreen ? 100 : 10;
+      const isMouseOverThisCanvas = 
+        mouseX >= rect.left - tolerance &&
+        mouseX <= rect.right + tolerance &&
+        mouseY >= rect.top - tolerance &&
+        mouseY <= rect.bottom + tolerance;
+      
+      if (!isMouseOverThisCanvas) {
+        // Mouse is not over this canvas, ignore the event
+        // This prevents regular mode handler from processing fullscreen events and vice versa
+        return;
+      }
+
+      // Secondary check: Verify event target is within this component's DOM tree
+      // This provides additional protection against event bubbling issues
+      const eventTarget = e.target;
+      const isEventTargetDocumentOrWindow = eventTarget === document || eventTarget === window;
+      const isEventInThisComponent = isEventTargetDocumentOrWindow ||
+                                     (eventTarget instanceof Node && canvas.contains(eventTarget)) || 
+                                     (eventTarget instanceof Node && container && container.contains(eventTarget));
+      
+      // If event target is document/window, rely on mouse position check (already passed above)
+      // Otherwise, ensure event target is within this component
+      if (!isEventTargetDocumentOrWindow && !isEventInThisComponent) {
+        // Event target is not from this component's DOM tree, ignore it
+        return;
       }
 
       e.preventDefault();
@@ -351,13 +355,20 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
       }
     };
 
-    // In fullscreen mode, don't attach handler here - let FullScreenTrainingMode handle it
-    // In regular mode, attach to container/canvas
+    // Attach event listeners with appropriate phase
+    const targetElement = container || canvas;
+    
     if (isFullScreen) {
-      // FullScreenTrainingMode will handle wheel events
-      return;
+      // In fullscreen mode, use capture phase to catch events before regular mode handler
+      // This ensures fullscreen zoom takes priority
+      targetElement.addEventListener("wheel", handleWheel, { passive: false, capture: true });
+      canvas.addEventListener("wheel", handleWheel, { passive: false, capture: true });
+      return () => {
+        targetElement.removeEventListener("wheel", handleWheel, { capture: true } as EventListenerOptions);
+        canvas.removeEventListener("wheel", handleWheel, { capture: true } as EventListenerOptions);
+      };
     } else {
-      const targetElement = container || canvas;
+      // In regular mode, use bubble phase (default)
       targetElement.addEventListener("wheel", handleWheel, { passive: false });
       canvas.addEventListener("wheel", handleWheel, { passive: false });
       return () => {
@@ -722,7 +733,7 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
         isFullScreen &&
         (referencePitch.length > 0 || studentPitch.length > 0)
       ) {
-        // In fullscreen, show the full pitch range (reference or student, whichever exists)
+        // In fullscreen, respect zoom level and center on pitch data
         let minTime = 0;
         let maxTime = 0;
 
@@ -734,11 +745,12 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
           maxTime = studentMaxTime;
         }
 
-        const pitchRange = maxTime - minTime;
         const effectiveMaxTime = Math.max(baseMaxTime, maxTime);
-        const effectiveRange = Math.max(visibleTimeRange, pitchRange);
+        // CRITICAL: Always use visibleTimeRange (zoom-based) instead of taking max with pitchRange
+        // This ensures zoom level is always respected in fullscreen mode
+        const effectiveRange = visibleTimeRange;
 
-        // Center on pitch data
+        // Center on pitch data, but respect zoom level
         const centerTime = (minTime + maxTime) / 2;
         const startTime = centerTime - effectiveRange / 2 + panTime;
         minVisibleTime = Math.max(
@@ -956,12 +968,9 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
         for (const point of smoothedReferencePitch) {
           if (point.f_hz === null || point.f_hz === undefined) continue;
 
-          // In fullscreen mode, show all reference pitch points
-          // Otherwise, skip points outside visible range
-          if (
-            !isFullScreen &&
-            (point.time < minVisibleTime || point.time > maxVisibleTime)
-          ) {
+          // CRITICAL: Always filter points outside visible range, regardless of fullscreen mode
+          // This ensures the graph never extends beyond the axis boundaries
+          if (point.time < minVisibleTime || point.time > maxVisibleTime) {
             continue;
           }
 
@@ -971,19 +980,23 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
           const x =
             padding +
             ((point.time - minVisibleTime) / actualVisibleRange) * graphWidth;
+          
+          // CRITICAL: Clip x coordinate to canvas bounds to prevent drawing outside graph area
+          const clippedX = Math.max(padding, Math.min(displayWidth - padding, x));
+          
           const y =
             displayHeight -
             padding -
             ((point.f_hz - finalMinFreq) / freqRange) * graphHeight;
 
           if (firstPoint) {
-            ctx.moveTo(x, y);
+            ctx.moveTo(clippedX, y);
             firstPoint = false;
           } else {
-            ctx.lineTo(x, y);
+            ctx.lineTo(clippedX, y);
           }
 
-          lastValidPoint = { x, y };
+          lastValidPoint = { x: clippedX, y };
         }
 
         // If we have a last valid point and the audio duration is longer than the last pitch point,
@@ -993,6 +1006,8 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
             ...smoothedReferencePitch.map((p) => p.time)
           );
           const actualVisibleRange = maxVisibleTime - minVisibleTime;
+          
+          // CRITICAL: Only extend if referenceDuration is within visible range
           if (
             referenceDuration > lastPitchTime &&
             referenceDuration >= minVisibleTime &&
@@ -1003,7 +1018,10 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
               padding +
               ((referenceDuration - minVisibleTime) / actualVisibleRange) *
                 graphWidth;
-            ctx.lineTo(endX, lastValidPoint.y);
+            
+            // CRITICAL: Clip to canvas bounds to prevent drawing outside graph area
+            const clippedEndX = Math.max(padding, Math.min(displayWidth - padding, endX));
+            ctx.lineTo(clippedEndX, lastValidPoint.y);
           }
         }
 
@@ -1076,12 +1094,15 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
           const x =
             padding +
             ((point.time - minVisibleTime) / actualVisibleRange) * graphWidth;
+          
+          // CRITICAL: Clip x coordinate to canvas bounds to prevent drawing outside graph area
+          const clippedX = Math.max(padding, Math.min(displayWidth - padding, x));
 
           if (point.frequency === null || point.frequency === undefined) {
             // For null frequencies, interpolate from last valid point
             if (lastValidPoint !== null) {
               // Draw horizontal line to current x position
-              ctx.lineTo(x, lastValidPoint.y);
+              ctx.lineTo(clippedX, lastValidPoint.y);
             } else {
               // No previous valid point - start new segment
               firstPoint = true;
@@ -1095,7 +1116,7 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
             ((point.frequency - finalMinFreq) / freqRange) * graphHeight;
 
           if (firstPoint) {
-            ctx.moveTo(x, y);
+            ctx.moveTo(clippedX, y);
             firstPoint = false;
           } else {
             // If we had a gap, draw from last valid point
@@ -1103,16 +1124,16 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
             const expectedXSpacing = graphWidth / (actualVisibleRange * 10); // Approximate spacing
             if (
               lastValidPoint !== null &&
-              Math.abs(lastValidPoint.x - x) > expectedXSpacing * 2
+              Math.abs(lastValidPoint.x - clippedX) > expectedXSpacing * 2
             ) {
               ctx.lineTo(lastValidPoint.x, lastValidPoint.y);
-              ctx.lineTo(x, y);
+              ctx.lineTo(clippedX, y);
             } else {
-              ctx.lineTo(x, y);
+              ctx.lineTo(clippedX, y);
             }
           }
 
-          lastValidPoint = { x, y };
+          lastValidPoint = { x: clippedX, y };
         }
         ctx.stroke();
 

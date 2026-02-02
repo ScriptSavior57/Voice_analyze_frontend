@@ -147,6 +147,7 @@ const TrainingStudio: React.FC = () => {
 
   // Full-screen training mode state
   const [isFullScreenMode, setIsFullScreenMode] = useState(false);
+  const [fullScreenZoomLevel, setFullScreenZoomLevel] = useState(2.0); // Start with 200% zoom for better visibility
 
   // Practice mode state
   const [isPracticeMode, setIsPracticeMode] = useState(false);
@@ -4322,6 +4323,8 @@ const TrainingStudio: React.FC = () => {
             : (selectedRef?.url || "")
         }
         studentBlob={studentBlob}
+        zoomLevel={fullScreenZoomLevel}
+        onZoomChange={setFullScreenZoomLevel}
       />
 
       {/* Countdown Overlay - Shows before practice mode starts */}

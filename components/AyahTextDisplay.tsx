@@ -46,14 +46,6 @@ const AyahTextDisplay: React.FC<AyahTextDisplayProps> = ({
     (ayah) => currentTime >= ayah.start && currentTime < ayah.end
   );
 
-  // Reverse the array for display (so admin1_2 appears on left, admin1_1 on right)
-  const reversedAyatTiming = [...sortedAyatTiming].reverse();
-
-  // Calculate active index in reversed array
-  const reversedActiveIndex = activeSegmentIndex >= 0 
-    ? reversedAyatTiming.length - 1 - activeSegmentIndex 
-    : -1;
-
   const handleSegmentClick = (ayah: AyahTiming) => {
     if (onSeek) {
       onSeek(ayah.start);
@@ -72,7 +64,7 @@ const AyahTextDisplay: React.FC<AyahTextDisplayProps> = ({
       className='mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200'
       role='region'
       aria-label='Quranic text with timing'
-      dir='rtl' // RTL direction for the entire container
+      dir='rtl' // RTL direction for the container to enable right-to-left row flow
     >
       <h4
         className='text-xs font-bold text-slate-500 uppercase mb-3 tracking-wider'
@@ -82,23 +74,24 @@ const AyahTextDisplay: React.FC<AyahTextDisplayProps> = ({
         Quranic Text
       </h4>
       <div
-        className='flex flex-wrap gap-2 items-center justify-center'
+        className='flex flex-wrap gap-2 items-center justify-start'
         role='group'
         aria-labelledby='ayah-text-heading'
-        dir='ltr' // LTR direction for button order (left-to-right, so first segment appears on left)
+        dir='rtl' // RTL direction so each row flows right-to-left
         style={{
-          direction: "ltr", // Explicit LTR for button layout order
+          direction: "rtl", // Explicit RTL for button layout - rows flow right-to-left
+          flexDirection: "row", // Row direction (RTL will reverse the visual order)
         }}
       >
-        {reversedAyatTiming.map((ayah, index) => {
-          const isActive = index === reversedActiveIndex;
+        {sortedAyatTiming.map((ayah, index) => {
+          const isActive = index === activeSegmentIndex;
           const isPast = currentTime >= ayah.end;
           const isFuture = currentTime < ayah.start;
           const hasText = ayah.text && ayah.text.trim() !== "";
 
           return (
             <button
-              key={index}
+              key={`segment-${ayah.start}-${ayah.end}-${index}`}
               onClick={() => handleSegmentClick(ayah)}
               onKeyDown={(e) => handleKeyDown(e, ayah)}
               className={`

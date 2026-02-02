@@ -291,102 +291,7 @@ const FullScreenTrainingMode: React.FC<FullScreenTrainingModeProps> = ({
     onPracticeStop,
   ]);
 
-  // ENHANCEMENT: Wheel zoom handler for fullscreen mode
-  // This ensures zoom works even if the modal blocks events
-  // MUST be before the early return to follow Rules of Hooks
-  useEffect(() => {
-    if (!isOpen || !onZoomChange) return;
-
-    const handleWheel = (e: WheelEvent) => {
-      // Find the canvas element directly
-      const canvas = containerRef.current?.querySelector('canvas');
-      if (!canvas) {
-        // If no canvas found, check if mouse is in modal area
-        const modalContainer = containerRef.current;
-        if (!modalContainer) return;
-        const modalRect = modalContainer.getBoundingClientRect();
-        const mouseX = e.clientX;
-        const mouseY = e.clientY;
-        if (
-          mouseX < modalRect.left ||
-          mouseX > modalRect.right ||
-          mouseY < modalRect.top ||
-          mouseY > modalRect.bottom
-        ) {
-          return;
-        }
-      } else {
-        // Check if mouse is over canvas
-        const rect = canvas.getBoundingClientRect();
-        const mouseX = e.clientX;
-        const mouseY = e.clientY;
-        if (
-          mouseX < rect.left ||
-          mouseX > rect.right ||
-          mouseY < rect.top ||
-          mouseY > rect.bottom
-        ) {
-          return;
-        }
-      }
-
-      // Don't zoom if scrolling over buttons or controls
-      const target = e.target as HTMLElement;
-      if (
-        target.tagName === 'BUTTON' ||
-        target.closest('button') ||
-        target.closest('[role="button"]')
-      ) {
-        return;
-      }
-
-      e.preventDefault();
-      e.stopPropagation();
-
-      const delta = e.deltaY > 0 ? -0.1 : 0.1;
-      const currentZoom = zoomLevel || 1.0;
-      const newZoom = Math.max(0.5, Math.min(4.0, currentZoom + delta));
-      
-      if (Math.abs(newZoom - currentZoom) > 0.01) {
-        onZoomChange(newZoom);
-      }
-    };
-
-    // Use a MutationObserver to wait for canvas to be available, then attach directly to it
-    const modalContainer = containerRef.current;
-    if (!modalContainer) return;
-
-    const attachToCanvas = () => {
-      const canvas = modalContainer.querySelector('canvas');
-      if (canvas) {
-        canvas.addEventListener("wheel", handleWheel, { passive: false });
-        return () => canvas.removeEventListener("wheel", handleWheel);
-      }
-      return undefined;
-    };
-
-    // Try to attach immediately
-    let cleanup = attachToCanvas();
-
-    // Also attach to document as fallback
-    const options = { passive: false, capture: true };
-    document.addEventListener("wheel", handleWheel, options);
-
-    // Use MutationObserver to attach when canvas appears
-    const observer = new MutationObserver(() => {
-      if (!cleanup) {
-        cleanup = attachToCanvas();
-      }
-    });
-
-    observer.observe(modalContainer, { childList: true, subtree: true });
-
-    return () => {
-      document.removeEventListener("wheel", handleWheel, options);
-      observer.disconnect();
-      if (cleanup) cleanup();
-    };
-  }, [isOpen, zoomLevel, onZoomChange]);
+  // Note: Wheel zoom is handled by LivePitchGraph component for consistency with regular mode
 
   if (!isOpen) return null;
 
@@ -426,8 +331,14 @@ const FullScreenTrainingMode: React.FC<FullScreenTrainingModeProps> = ({
       aria-modal='true'
       aria-label='Full-screen training mode'
     >
-      {/* ENHANCEMENT: Top Right Controls - Theme and Practice Stats */}
+      {/* ENHANCEMENT: Top Right Controls - Theme, Practice Stats, and Zoom Status */}
       <div className='absolute top-2 right-2 z-10 flex items-center gap-2'>
+        {/* Zoom Status Display */}
+        {onZoomChange && (
+          <div className={`px-3 py-1.5 rounded ${currentTheme.controlsBg} border ${currentTheme.border} ${currentTheme.text} text-sm font-medium backdrop-blur-sm`}>
+            Zoom: {Math.round((zoomLevel || 1.0) * 100)}%
+          </div>
+        )}
         {/* Practice Statistics Toggle */}
         {isPracticeMode && practiceAttempts > 0 && (
           <button
@@ -510,33 +421,6 @@ const FullScreenTrainingMode: React.FC<FullScreenTrainingModeProps> = ({
             theme={currentTheme}
           />
         </div>
-
-        {/* ENHANCEMENT: Zoom Controls - Smaller and repositioned */}
-        {onZoomChange && (
-          <div className='absolute top-12 right-2 flex flex-col gap-1 z-10'>
-            <button
-              onClick={() => onZoomChange(Math.min(2.0, zoomLevel + 0.1))}
-              className={`w-8 h-8 rounded ${currentTheme.controlsBg} border ${currentTheme.border} ${currentTheme.text} flex items-center justify-center hover:opacity-80 transition-opacity`}
-              title='Zoom in (+)'
-              aria-label='Zoom in'
-            >
-              <ZoomIn size={14} />
-            </button>
-            <button
-              onClick={() => onZoomChange(Math.max(0.5, zoomLevel - 0.1))}
-              className={`w-8 h-8 rounded ${currentTheme.controlsBg} border ${currentTheme.border} ${currentTheme.text} flex items-center justify-center hover:opacity-80 transition-opacity`}
-              title='Zoom out (-)'
-              aria-label='Zoom out'
-            >
-              <ZoomOut size={14} />
-            </button>
-            <div
-              className={`text-[10px] ${currentTheme.textMuted} text-center mt-0.5`}
-            >
-              {Math.round(zoomLevel * 100)}%
-            </div>
-          </div>
-        )}
 
         {/* Graph Container - Full width for exact fit */}
         <div
