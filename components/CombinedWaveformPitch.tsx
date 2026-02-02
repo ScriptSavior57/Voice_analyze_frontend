@@ -24,6 +24,8 @@ interface CombinedWaveformPitchProps {
   // Shared props
   height?: number; // Total height - split between pitch (60%) and waveform (40%)
   isFullScreen?: boolean;
+  zoomLevel?: number; // External zoom level control (optional)
+  onZoomChange?: (zoom: number) => void; // Callback when zoom changes externally
 }
 
 /**
@@ -48,6 +50,8 @@ const CombinedWaveformPitch: React.FC<CombinedWaveformPitchProps> = ({
   onSeek,
   height = 600, // Default total height
   isFullScreen = false,
+  zoomLevel,
+  onZoomChange,
 }) => {
   // Calculate heights: pitch graph fixed at 255px, waveform takes remaining space
   const pitchHeight = 255;
@@ -101,7 +105,9 @@ const CombinedWaveformPitch: React.FC<CombinedWaveformPitchProps> = ({
           onMarkerClick={onMarkerClick}
           fixedYAxis={isFullScreen}
           minFreq={60}
-          maxFreq={1200}
+          maxFreq={600} // Locked to 600 Hz maximum for better visibility on tablets/iPads
+          zoomLevel={zoomLevel}
+          onZoomChange={onZoomChange}
         />
       </div>
 

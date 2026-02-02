@@ -182,13 +182,34 @@ const SegmentPractice: React.FC<SegmentPracticeProps> = ({
     const studentDuration = studentWaveSurferRef.current.getDuration();
 
     if (refDuration > 0 && studentDuration > 0) {
-      const startTime = segment.start * refDuration;
-      const endTime = segment.end * refDuration;
-      const segmentDuration = endTime - startTime;
+      // Detect if segments are normalized (0-1) or absolute (seconds)
+      // If start/end values are > 1, they're likely in seconds (absolute)
+      // If start/end values are <= 1, they're likely normalized (0-1)
+      const isNormalized = segment.start <= 1 && segment.end <= 1;
+      
+      let normalizedStart: number;
+      let normalizedEnd: number;
+      let segmentDuration: number;
 
-      // Seek to segment start
-      refWaveSurferRef.current.seekTo(segment.start);
-      studentWaveSurferRef.current.seekTo(segment.start);
+      if (isNormalized) {
+        // Segments are already normalized (0-1)
+        normalizedStart = segment.start;
+        normalizedEnd = segment.end;
+        segmentDuration = (segment.end - segment.start) * refDuration;
+      } else {
+        // Segments are in absolute seconds - convert to normalized
+        normalizedStart = segment.start / refDuration;
+        normalizedEnd = segment.end / refDuration;
+        segmentDuration = segment.end - segment.start;
+        
+        // Clamp to valid range
+        normalizedStart = Math.max(0, Math.min(1, normalizedStart));
+        normalizedEnd = Math.max(normalizedStart, Math.min(1, normalizedEnd));
+      }
+
+      // Seek to segment start (using normalized values)
+      refWaveSurferRef.current.seekTo(normalizedStart);
+      studentWaveSurferRef.current.seekTo(normalizedStart);
 
       // Play segment
       refWaveSurferRef.current.play();

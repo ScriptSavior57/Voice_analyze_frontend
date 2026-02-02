@@ -14,9 +14,11 @@ interface LivePitchGraphProps {
   isFullScreen?: boolean; // Full-screen training mode (hides controls, simplifies UI)
   markers?: PitchMarker[]; // Training markers for unclear/unstable segments
   onMarkerClick?: (time: number) => void; // Callback when marker is clicked
-  fixedYAxis?: boolean; // Lock Y-axis to fixed range (60-1200 Hz) when true
+  fixedYAxis?: boolean; // Lock Y-axis to fixed range (60-600 Hz) when true
   minFreq?: number; // Minimum frequency for fixed Y-axis (default: 60 Hz)
-  maxFreq?: number; // Maximum frequency for fixed Y-axis (default: 1200 Hz)
+  maxFreq?: number; // Maximum frequency for fixed Y-axis (default: 600 Hz)
+  zoomLevel?: number; // External zoom level control (optional)
+  onZoomChange?: (zoom: number) => void; // Callback when zoom changes externally
 }
 
 const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
@@ -32,14 +34,24 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
   onMarkerClick,
   fixedYAxis = false,
   minFreq = 60,
-  maxFreq = 1200,
+  maxFreq = 600, // Locked to 600 Hz maximum for better visibility on tablets/iPads
+  zoomLevel, // External zoom control (optional)
+  onZoomChange, // External zoom change callback (optional)
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const animationFrameRef = useRef<number | null>(null);
 
-  // Zoom and pan state
-  const [zoomLevel, setZoomLevel] = useState(1.0); // 1.0 = 100%, 2.0 = 200%, etc.
+  // Zoom and pan state - use external zoomLevel if provided, otherwise use internal state
+  const [internalZoomLevel, setInternalZoomLevel] = useState(1.0); // 1.0 = 100%, 2.0 = 200%, etc.
+  const effectiveZoomLevel = zoomLevel !== undefined ? zoomLevel : internalZoomLevel;
+  
+  // Update internal zoom when external zoom changes
+  useEffect(() => {
+    if (zoomLevel !== undefined) {
+      setInternalZoomLevel(zoomLevel);
+    }
+  }, [zoomLevel]);
   const [panOffset, setPanOffset] = useState(0); // Horizontal pan offset in pixels
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, pan: 0 });
@@ -51,11 +63,13 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
   const manualPanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // In full-screen mode, lock auto-follow and disable manual pan
+  // Note: Don't reset zoom - allow users to zoom in fullscreen mode
   useEffect(() => {
     if (isFullScreen) {
       setAutoFollow(true);
       setManualPanActive(false);
-      setZoomLevel(1.0);
+      // Don't reset zoom - allow zooming in fullscreen mode
+      // Only reset pan offset
       setPanOffset(0);
     }
   }, [isFullScreen]);
@@ -178,24 +192,35 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
     };
   }, [height, isFullScreen]); // Add isFullScreen to dependencies
 
-  // Zoom handlers
+  // Zoom handlers - use external callback if provided, otherwise use internal state
   const handleZoomIn = () => {
-    setZoomLevel((prev) => Math.min(4.0, prev + 0.25));
+    const newZoom = Math.min(4.0, effectiveZoomLevel + 0.25);
+    if (onZoomChange) {
+      onZoomChange(newZoom);
+    } else {
+      setInternalZoomLevel(newZoom);
+    }
   };
 
   const handleZoomOut = () => {
-    setZoomLevel((prev) => {
-      const newZoom = Math.max(0.5, prev - 0.25);
-      // Reset pan if zooming out too far
-      if (newZoom <= 1.0) {
-        setPanOffset(0);
-      }
-      return newZoom;
-    });
+    const newZoom = Math.max(0.5, effectiveZoomLevel - 0.25);
+    // Reset pan if zooming out too far
+    if (newZoom <= 1.0) {
+      setPanOffset(0);
+    }
+    if (onZoomChange) {
+      onZoomChange(newZoom);
+    } else {
+      setInternalZoomLevel(newZoom);
+    }
   };
 
   const handleZoomReset = () => {
-    setZoomLevel(1.0);
+    if (onZoomChange) {
+      onZoomChange(1.0);
+    } else {
+      setInternalZoomLevel(1.0);
+    }
     setPanOffset(0);
   };
 
@@ -221,20 +246,57 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
         0.5,
         Math.min(2.0, (graphWidth / baseMaxTime) * 10)
       );
-      setZoomLevel(optimalZoom);
+      if (onZoomChange) {
+        onZoomChange(optimalZoom);
+      } else {
+        setInternalZoomLevel(optimalZoom);
+      }
       setPanOffset(0);
     }
   };
 
-  // Mouse wheel zoom
+  // Mouse wheel zoom - attach to document in fullscreen mode to bypass modal blocking
   useEffect(() => {
     const canvas = canvasRef.current;
+    const container = containerRef.current;
     if (!canvas) return;
 
     const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
+      // Get canvas bounds for calculations
       const rect = canvas.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
+      const mouseX = e.clientX;
+      const mouseY = e.clientY;
+      
+      // In fullscreen mode, skip bounds check - let the FullScreenTrainingMode handler handle it
+      // In regular mode, check bounds strictly
+      if (!isFullScreen) {
+        const tolerance = 10;
+        if (
+          mouseX < rect.left - tolerance ||
+          mouseX > rect.right + tolerance ||
+          mouseY < rect.top - tolerance ||
+          mouseY > rect.bottom + tolerance
+        ) {
+          return; // Mouse is outside canvas area, ignore
+        }
+      } else {
+        // In fullscreen, still check if mouse is roughly over the canvas area
+        // But be very lenient - the FullScreenTrainingMode handler is the primary one
+        const tolerance = 200; // Very large tolerance
+        if (
+          mouseX < rect.left - tolerance ||
+          mouseX > rect.right + tolerance ||
+          mouseY < rect.top - tolerance ||
+          mouseY > rect.bottom + tolerance
+        ) {
+          return; // Mouse is way outside canvas area, ignore
+        }
+      }
+
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const relativeX = mouseX - rect.left;
       const padding = 60;
       const graphWidth = rect.width - padding * 2;
 
@@ -249,7 +311,7 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
           : refMaxTime;
       const baseMaxTime = Math.max(audioDuration, currentTime || 0, 10);
 
-      const currentVisibleRange = baseMaxTime / zoomLevel;
+      const currentVisibleRange = baseMaxTime / effectiveZoomLevel;
       const pixelsPerSecond = graphWidth / currentVisibleRange;
       const panTime = panOffset / pixelsPerSecond;
       const centerTime = baseMaxTime / 2;
@@ -260,34 +322,50 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
       );
 
       // Calculate time at mouse position
-      const mouseXInGraph = mouseX - padding;
+      const mouseXInGraph = relativeX - padding;
       const mouseTime =
         currentMinVisibleTime +
         (mouseXInGraph / graphWidth) * currentVisibleRange;
 
       const delta = e.deltaY > 0 ? -0.1 : 0.1;
-      setZoomLevel((prev) => {
-        const newZoom = Math.max(0.5, Math.min(4.0, prev + delta));
-        if (newZoom !== prev) {
-          // Adjust pan to keep mouse position fixed
-          const newVisibleRange = baseMaxTime / newZoom;
-          const newPixelsPerSecond = graphWidth / newVisibleRange;
-          const newCenterTime = mouseTime;
-          const newPanTime = newCenterTime - baseMaxTime / 2;
-          const maxPanTime = baseMaxTime - newVisibleRange;
-          const clampedPanTime = Math.max(
-            -maxPanTime / 2,
-            Math.min(maxPanTime / 2, newPanTime)
-          );
-          setPanOffset(clampedPanTime * newPixelsPerSecond);
+      const newZoom = Math.max(0.5, Math.min(4.0, effectiveZoomLevel + delta));
+      if (newZoom !== effectiveZoomLevel) {
+        // Adjust pan to keep mouse position fixed
+        const newVisibleRange = baseMaxTime / newZoom;
+        const newPixelsPerSecond = graphWidth / newVisibleRange;
+        const newCenterTime = mouseTime;
+        const newPanTime = newCenterTime - baseMaxTime / 2;
+        const maxPanTime = baseMaxTime - newVisibleRange;
+        const clampedPanTime = Math.max(
+          -maxPanTime / 2,
+          Math.min(maxPanTime / 2, newPanTime)
+        );
+        setPanOffset(clampedPanTime * newPixelsPerSecond);
+        
+        // Update zoom using external callback or internal state
+        if (onZoomChange) {
+          onZoomChange(newZoom);
+        } else {
+          setInternalZoomLevel(newZoom);
         }
-        return newZoom;
-      });
+      }
     };
 
-    canvas.addEventListener("wheel", handleWheel, { passive: false });
-    return () => canvas.removeEventListener("wheel", handleWheel);
-  }, [zoomLevel, panOffset, referencePitch, referenceDuration, currentTime]);
+    // In fullscreen mode, don't attach handler here - let FullScreenTrainingMode handle it
+    // In regular mode, attach to container/canvas
+    if (isFullScreen) {
+      // FullScreenTrainingMode will handle wheel events
+      return;
+    } else {
+      const targetElement = container || canvas;
+      targetElement.addEventListener("wheel", handleWheel, { passive: false });
+      canvas.addEventListener("wheel", handleWheel, { passive: false });
+      return () => {
+        targetElement.removeEventListener("wheel", handleWheel);
+        canvas.removeEventListener("wheel", handleWheel);
+      };
+    }
+  }, [effectiveZoomLevel, panOffset, referencePitch, referenceDuration, currentTime, onZoomChange, isFullScreen]);
 
   // Auto-follow: Auto-pan to center current time during playback/recording
   useEffect(() => {
@@ -311,7 +389,7 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
 
     const padding = 60;
     const graphWidth = canvas.width - padding * 2;
-    const visibleTimeRange = baseMaxTime / zoomLevel;
+    const visibleTimeRange = baseMaxTime / effectiveZoomLevel;
 
     // Calculate desired center position (currentTime should be in center)
     const desiredCenterTime = currentTime;
@@ -340,7 +418,7 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
     currentTime,
     isPlaying,
     isRecording,
-    zoomLevel,
+    effectiveZoomLevel,
     referenceDuration,
     referencePitch,
     autoFollow,
@@ -350,7 +428,7 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
   // Mouse drag for panning
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || zoomLevel <= 1.0) return;
+    if (!canvas || effectiveZoomLevel <= 1.0) return;
 
     const handleMouseDown = (e: MouseEvent) => {
       setIsDragging(true);
@@ -372,7 +450,7 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
 
         // Calculate max pan based on zoom level
         // When zoomed in, we can pan more
-        const visibleTimeRange = (referenceDuration || 10) / zoomLevel;
+        const visibleTimeRange = (referenceDuration || 10) / effectiveZoomLevel;
         const pixelsPerSecond = graphWidth / visibleTimeRange;
         const maxPanTime = (referenceDuration || 10) - visibleTimeRange;
         const maxPan = maxPanTime * pixelsPerSecond;
@@ -407,7 +485,7 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
         clearTimeout(manualPanTimeoutRef.current);
       }
     };
-  }, [isDragging, dragStart, zoomLevel, panOffset, referenceDuration]);
+  }, [isDragging, dragStart, effectiveZoomLevel, panOffset, referenceDuration]);
 
   // Smooth reference pitch data using multi-pass tension-based interpolation
   // Enhanced for tarannum training to match requirement for very smooth melodic flow
@@ -625,9 +703,9 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
       const graphHeight = displayHeight - padding * 2;
 
       // Calculate visible time range based on zoom
-      // At zoomLevel 1.0, we show the full baseMaxTime
-      // At zoomLevel 2.0, we show baseMaxTime/2 (zoomed in 2x)
-      const visibleTimeRange = baseMaxTime / zoomLevel;
+      // At effectiveZoomLevel 1.0, we show the full baseMaxTime
+      // At effectiveZoomLevel 2.0, we show baseMaxTime/2 (zoomed in 2x)
+      const visibleTimeRange = baseMaxTime / effectiveZoomLevel;
 
       // Calculate pan in time units (not pixels)
       // panOffset is in pixels, convert to time
@@ -791,13 +869,16 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
         .filter((f): f is number => f !== null && f !== undefined);
 
       const allFreqs = [...refFreqs, ...studentFreqs];
-      // Use fixed Y-axis range in full-screen mode, otherwise auto-scale
+      // Always use fixed Y-axis range in full-screen mode (locked to 60-600 Hz for better visibility)
+      // This prevents graph shrinking when pitch spikes occur, especially on tablets/iPads
       const useFixedRange = isFullScreen || fixedYAxis;
       const calculatedMinFreq = allFreqs.length > 0 ? Math.min(...allFreqs) : 60;
-      const calculatedMaxFreq = allFreqs.length > 0 ? Math.max(...allFreqs) : 1200;
+      const calculatedMaxFreq = allFreqs.length > 0 ? Math.max(...allFreqs) : 600;
+      // Cap calculated max at 600 Hz even when auto-scaling
+      const cappedCalculatedMaxFreq = Math.min(calculatedMaxFreq, 600);
       const finalMinFreq = useFixedRange ? minFreq : calculatedMinFreq;
-      const finalMaxFreq = useFixedRange ? maxFreq : calculatedMaxFreq;
-      const freqRange = finalMaxFreq - finalMinFreq || 1140;
+      const finalMaxFreq = useFixedRange ? maxFreq : Math.min(cappedCalculatedMaxFreq, 600);
+      const freqRange = finalMaxFreq - finalMinFreq || 540; // 600 - 60 = 540
 
       // Draw grid
       ctx.strokeStyle = "#e2e8f0";
@@ -1061,8 +1142,9 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
       }
 
       // Draw current time cursor (blue vertical line) - shows during recording and playback
-      // Always show cursor if currentTime > 0, even if slightly outside visible range
-      if (currentTime > 0 && baseMaxTime > 0) {
+      // Stop at 10.0 seconds instead of continuing across entire graph
+      // This provides better visual feedback for the first 10 seconds of practice
+      if (currentTime > 0 && currentTime <= 10.0 && baseMaxTime > 0) {
         // Extend visible range slightly to show cursor near edges
         const extendedMinTime =
           minVisibleTime - (maxVisibleTime - minVisibleTime) * 0.1;
@@ -1222,7 +1304,7 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
       studentPitch.length > 0 || // Start/continue if student pitch exists (even after practice stops)
       referencePitch.length > 0 // Start/continue if reference pitch exists (even after playback stops)
     ) {
-      animationFrameRef.current = requestAnimationFrame((time) => animate(time));
+      animationFrameRef.current = requestAnimationFrame(animate);
     } else {
       // Even if not animating, ensure we draw at least once after canvas is ready
       const delayedDraw = () => {
@@ -1248,7 +1330,7 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
     isPlaying,
     currentTime,
     height,
-    zoomLevel,
+    effectiveZoomLevel,
     panOffset,
     referenceDuration,
     isFullScreen, // Add isFullScreen to trigger redraw when entering fullscreen
@@ -1413,7 +1495,7 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
         : refMaxTime;
     const baseMaxTime = Math.max(audioDuration, currentTime || 0, 10);
 
-    const visibleTimeRange = baseMaxTime / zoomLevel;
+    const visibleTimeRange = baseMaxTime / effectiveZoomLevel;
     const maxPanTime = Math.max(0, baseMaxTime - visibleTimeRange);
 
     // Calculate scrollbar position (0 to 100)
@@ -1485,18 +1567,18 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
             <span className='text-xs text-slate-600 font-medium'>Zoom:</span>
             <button
               onClick={handleZoomOut}
-              disabled={zoomLevel <= 0.5}
+              disabled={effectiveZoomLevel <= 0.5}
               className='p-1.5 rounded hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
               title='Zoom Out'
             >
               <ZoomOut size={16} className='text-slate-600' />
             </button>
             <span className='text-xs font-semibold text-slate-700 min-w-[50px] text-center'>
-              {Math.round(zoomLevel * 100)}%
+              {Math.round(effectiveZoomLevel * 100)}%
             </span>
             <button
               onClick={handleZoomIn}
-              disabled={zoomLevel >= 4.0}
+              disabled={effectiveZoomLevel >= 4.0}
               className='p-1.5 rounded hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
               title='Zoom In'
             >
@@ -1537,7 +1619,7 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
               <span className='text-xs'>📍</span>
             </button>
           </div>
-          {zoomLevel > 1.0 && (
+          {effectiveZoomLevel > 1.0 && (
             <span className='text-xs text-slate-500'>
               {autoFollow ? "Auto-following • " : ""}Drag to pan • Scroll to
               zoom
@@ -1552,7 +1634,7 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
             ? "border-2 border-slate-700 rounded-xl bg-white"
             : "border border-slate-300 rounded-lg bg-white"
         } ${
-          !isFullScreen && zoomLevel > 1.0
+          !isFullScreen && effectiveZoomLevel > 1.0
             ? "cursor-grab active:cursor-grabbing"
             : ""
         }`}
@@ -1606,7 +1688,7 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
         }
       />
       {/* Horizontal Scrollbar for X-axis - Show when zoomed */}
-      {zoomLevel > 1.0 && scrollbarValues.maxPanTime > 0 && (
+      {effectiveZoomLevel > 1.0 && scrollbarValues.maxPanTime > 0 && (
         <div className='mt-3 px-4 py-2 border-t border-slate-200 bg-slate-50'>
           <div className='flex items-center gap-3'>
             <span className='text-xs font-medium text-slate-700 min-w-[50px]'>

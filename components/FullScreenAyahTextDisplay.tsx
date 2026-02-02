@@ -87,26 +87,11 @@ const FullScreenAyahTextDisplay: React.FC<FullScreenAyahTextDisplayProps> = ({
               </span>
             )}
           </div>
-          {displayCurrentVerse && (
-            <div
-              className={`mt-2 text-sm ${theme.textMuted} text-center`}
-              dir="ltr"
-            >
-              {displayCurrentVerse.start.toFixed(1)}s -{" "}
-              {displayCurrentVerse.end.toFixed(1)}s
-            </div>
-          )}
         </div>
 
         {/* Next Verse - Preview (Smaller) */}
         {displayNextVerse && displayNextVerse !== displayCurrentVerse && (
           <div className="mt-4">
-            <div
-              className={`text-xs ${theme.textMuted} uppercase tracking-wider mb-2 text-center`}
-              dir="ltr"
-            >
-              Next
-            </div>
             <div
               className={`text-2xl md:text-3xl font-medium ${theme.textMuted} leading-relaxed text-center py-4 px-6 rounded-lg bg-slate-800/30 border border-slate-600/30`}
               style={{
