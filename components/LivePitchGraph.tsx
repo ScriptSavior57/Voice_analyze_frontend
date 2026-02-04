@@ -378,7 +378,9 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
     }
   }, [effectiveZoomLevel, panOffset, referencePitch, referenceDuration, currentTime, onZoomChange, isFullScreen]);
 
-  // Auto-follow: Auto-pan to center current time during playback/recording
+  // Auto-follow: Auto-pan during playback/recording
+  // Behaviour: auto-pan only until the tracking line reaches the center of the visible window.
+  // After that, the viewport stays fixed (graph no longer scrolls under the fixed tracking line).
   useEffect(() => {
     // Only auto-pan if auto-follow is enabled and user hasn't manually panned
     if (!autoFollow || manualPanActive || (!isPlaying && !isRecording)) {
@@ -402,16 +404,20 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
     const graphWidth = canvas.width - padding * 2;
     const visibleTimeRange = baseMaxTime / effectiveZoomLevel;
 
-    // Calculate desired center position (currentTime should be in center)
-    const desiredCenterTime = currentTime;
+    // Calculate desired center position.
+    // Graph finishes at the tracking line: center follows playback until end of audio.
+    // When playback completes, the last pitch point is at the center (tracking line).
+    const desiredCenterTime = Math.min(currentTime, audioDuration);
+
     const currentCenterTime = baseMaxTime / 2;
     const panTimeNeeded = desiredCenterTime - currentCenterTime;
 
-    // Calculate max pan allowed
+    // Allow pan so center can reach audioDuration (graph finishes at tracking line)
     const maxPanTime = Math.max(0, baseMaxTime - visibleTimeRange);
+    const maxRightPan = Math.max(maxPanTime / 2, audioDuration - baseMaxTime / 2);
     const clampedPanTime = Math.max(
       -maxPanTime / 2,
-      Math.min(maxPanTime / 2, panTimeNeeded)
+      Math.min(maxRightPan, panTimeNeeded)
     );
 
     // Convert to pixels
@@ -751,15 +757,21 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
         const effectiveRange = visibleTimeRange;
 
         // Center on pitch data, but respect zoom level
+        // Allow center to reach audioDuration (graph finishes at tracking line)
         const centerTime = (minTime + maxTime) / 2;
         const startTime = centerTime - effectiveRange / 2 + panTime;
+        const maxStartForCenterAtEnd = Math.max(
+          effectiveMaxTime - effectiveRange,
+          audioDuration - effectiveRange / 2
+        );
         minVisibleTime = Math.max(
           0,
-          Math.min(startTime, effectiveMaxTime - effectiveRange)
+          Math.min(startTime, maxStartForCenterAtEnd)
         );
+        // Allow viewport to extend past end so center can reach audioDuration (graph finishes at tracking line)
         maxVisibleTime = Math.min(
-          effectiveMaxTime,
-          minVisibleTime + effectiveRange
+          minVisibleTime + effectiveRange,
+          Math.max(effectiveMaxTime, audioDuration + effectiveRange / 2)
         );
       } else {
         // Normal mode - ensure both reference and student pitch are visible
@@ -810,13 +822,18 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
             // Fallback if no valid time points
             const centerTime = baseMaxTime / 2;
             const startTime = centerTime - visibleTimeRange / 2 + panTime;
+            // Allow center to reach audioDuration (graph finishes at tracking line)
+            const maxStartForCenterAtEnd = Math.max(
+              baseMaxTime - visibleTimeRange,
+              audioDuration - visibleTimeRange / 2
+            );
             minVisibleTime = Math.max(
               0,
-              Math.min(startTime, baseMaxTime - visibleTimeRange)
+              Math.min(startTime, maxStartForCenterAtEnd)
             );
             maxVisibleTime = Math.min(
-              baseMaxTime,
-              minVisibleTime + visibleTimeRange
+              minVisibleTime + visibleTimeRange,
+              Math.max(baseMaxTime, audioDuration + visibleTimeRange / 2)
             );
           }
         } else if (studentPitch.length > 0) {
@@ -844,26 +861,34 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
             // Fallback
             const centerTime = baseMaxTime / 2;
             const startTime = centerTime - visibleTimeRange / 2 + panTime;
+            const maxStartForCenterAtEnd = Math.max(
+              baseMaxTime - visibleTimeRange,
+              audioDuration - visibleTimeRange / 2
+            );
             minVisibleTime = Math.max(
               0,
-              Math.min(startTime, baseMaxTime - visibleTimeRange)
+              Math.min(startTime, maxStartForCenterAtEnd)
             );
             maxVisibleTime = Math.min(
-              baseMaxTime,
-              minVisibleTime + visibleTimeRange
+              minVisibleTime + visibleTimeRange,
+              Math.max(baseMaxTime, audioDuration + visibleTimeRange / 2)
             );
           }
         } else {
           // Fallback to original calculation if only reference pitch exists
           const centerTime = baseMaxTime / 2;
           const startTime = centerTime - visibleTimeRange / 2 + panTime;
+          const maxStartForCenterAtEnd = Math.max(
+            baseMaxTime - visibleTimeRange,
+            audioDuration - visibleTimeRange / 2
+          );
           minVisibleTime = Math.max(
             0,
-            Math.min(startTime, baseMaxTime - visibleTimeRange)
+            Math.min(startTime, maxStartForCenterAtEnd)
           );
           maxVisibleTime = Math.min(
-            baseMaxTime,
-            minVisibleTime + visibleTimeRange
+            minVisibleTime + visibleTimeRange,
+            Math.max(baseMaxTime, audioDuration + visibleTimeRange / 2)
           );
         }
       }
