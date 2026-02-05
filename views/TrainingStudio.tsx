@@ -441,13 +441,16 @@ const TrainingStudio: React.FC = () => {
             : (isSelectedRefEmpty || (selectedRef?.id && selectedRef.id !== first.id));
           
           if (shouldUpdate) {
-            console.log(`[${userRole} Load] Updating selected reference to latest (current: ${selectedRef?.id || 'none'}, new: ${first.id})`);
-            // Get authenticated blob URL for audio elements
-            try {
-              const url = await referenceLibraryService.getReferenceAudioBlobUrl(first.id);
-              console.log(`[${userRole} Load] Got blob URL for reference:`, first.id);
+            console.log(
+              `[${userRole} Load] Updating selected reference to latest (current: ${
+                selectedRef?.id || "none"
+              }, new: ${first.id})`
+            );
 
-              // Set selectedRef with all properties including filename and upload_date
+            // Public/demo users: use direct audio URL without authentication
+            if (userRole === "public" || !user) {
+              const url = referenceLibraryService.getReferenceAudioUrl(first.id);
+
               setSelectedRef({
                 id: first.id,
                 title: first.title,
@@ -458,35 +461,70 @@ const TrainingStudio: React.FC = () => {
                 is_preset: first.is_preset || false,
                 text_segments: first.text_segments || [],
                 upload_date: first.upload_date,
-                ...first, // Include all other properties
-              });
-              
-              console.log(`[${userRole} Load] Selected reference updated to latest file`);
-            } catch (error) {
-              console.error("Failed to load reference audio:", error);
-              // Set selectedRef without URL - will retry
-              setSelectedRef({
-                id: first.id,
-                title: first.title,
-                filename: first.filename,
-                url: "", // Empty URL - will need to retry
-                duration: first.duration || 0,
-                maqam: first.maqam || "Library",
-                is_preset: first.is_preset || false,
-                text_segments: first.text_segments || [],
-                upload_date: first.upload_date,
                 ...first,
               });
-              // Retry getting blob URL after a short delay
-              setTimeout(async () => {
-                try {
-                  const retryUrl = await referenceLibraryService.getReferenceAudioBlobUrl(first.id);
-                  setSelectedRef((prev: any) => prev ? { ...prev, url: retryUrl } : prev);
-                } catch (retryError) {
-                  console.error("Retry failed:", retryError);
-                  setReferenceLibraryError("Failed to load reference audio. Please try again.");
-                }
-              }, 1000);
+            } else {
+              // Authenticated users (Admin/Qari/Student): use authenticated blob URL
+              try {
+                const url =
+                  await referenceLibraryService.getReferenceAudioBlobUrl(
+                    first.id
+                  );
+                console.log(
+                  `[${userRole} Load] Got blob URL for reference:`,
+                  first.id
+                );
+
+                // Set selectedRef with all properties including filename and upload_date
+                setSelectedRef({
+                  id: first.id,
+                  title: first.title,
+                  filename: first.filename,
+                  url,
+                  duration: first.duration || 0,
+                  maqam: first.maqam || "Library",
+                  is_preset: first.is_preset || false,
+                  text_segments: first.text_segments || [],
+                  upload_date: first.upload_date,
+                  ...first, // Include all other properties
+                });
+
+                console.log(
+                  `[${userRole} Load] Selected reference updated to latest file`
+                );
+              } catch (error) {
+                console.error("Failed to load reference audio:", error);
+                // Set selectedRef without URL - will retry
+                setSelectedRef({
+                  id: first.id,
+                  title: first.title,
+                  filename: first.filename,
+                  url: "", // Empty URL - will need to retry
+                  duration: first.duration || 0,
+                  maqam: first.maqam || "Library",
+                  is_preset: first.is_preset || false,
+                  text_segments: first.text_segments || [],
+                  upload_date: first.upload_date,
+                  ...first,
+                });
+                // Retry getting blob URL after a short delay
+                setTimeout(async () => {
+                  try {
+                    const retryUrl =
+                      await referenceLibraryService.getReferenceAudioBlobUrl(
+                        first.id
+                      );
+                    setSelectedRef((prev: any) =>
+                      prev ? { ...prev, url: retryUrl } : prev
+                    );
+                  } catch (retryError) {
+                    console.error("Retry failed:", retryError);
+                    setReferenceLibraryError(
+                      "Failed to load reference audio. Please try again."
+                    );
+                  }
+                }, 1000);
+              }
             }
 
             // Check if this is a preset with text_segments and load them
