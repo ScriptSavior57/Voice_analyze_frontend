@@ -1,0 +1,10 @@
+{
+  "//": "Ensure SPA routes like /login work when directly refreshed on Vercel",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
+
