@@ -61,7 +61,7 @@ const AyahTextDisplay: React.FC<AyahTextDisplayProps> = ({
 
   return (
     <div
-      className='mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200'
+      className='mt-4 p-3 sm:p-4 bg-slate-50 rounded-lg border border-slate-200'
       role='region'
       aria-label='Quranic text with timing'
       dir='rtl' // RTL direction for the container to enable right-to-left row flow
@@ -95,8 +95,8 @@ const AyahTextDisplay: React.FC<AyahTextDisplayProps> = ({
               onClick={() => handleSegmentClick(ayah)}
               onKeyDown={(e) => handleKeyDown(e, ayah)}
               className={`
-                px-4 py-2 rounded-lg text-lg font-medium transition-all duration-300 ease-in-out
-                border-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2
+                min-h-[44px] px-3 sm:px-4 py-2.5 sm:py-2 rounded-lg text-base sm:text-lg font-medium transition-all duration-300 ease-in-out
+                border-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 touch-manipulation
                 ${
                   isActive
                     ? "bg-emerald-100 border-emerald-400 text-emerald-800 shadow-md scale-105 font-semibold"

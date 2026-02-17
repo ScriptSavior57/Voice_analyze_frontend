@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import WaveSurfer from "wavesurfer.js";
 import { Play, Pause, Square, RotateCcw } from "lucide-react";
+import { formatSegmentScore } from "../utils/scoreFormat";
 
 interface Segment {
   start: number;
@@ -324,7 +325,7 @@ const DualWaveform: React.FC<DualWaveformProps> = ({
                     backgroundColor: color,
                     opacity: 0.6,
                   }}
-                  title={`Segment ${idx + 1}: ${segment.score.toFixed(1)}% (${
+                  title={`Segment ${idx + 1}: ${formatSegmentScore(segment.score)}% (${
                     segment.accuracy
                   })`}
                 />

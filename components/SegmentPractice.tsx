@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import WaveSurfer from "wavesurfer.js";
 import { Play, Pause, Target, RotateCcw, X } from "lucide-react";
+import { formatSegmentScore, formatSegmentRange } from "../utils/scoreFormat";
 
 interface Segment {
   start: number;
@@ -306,15 +307,7 @@ const SegmentPractice: React.FC<SegmentPracticeProps> = ({
               : segment.accuracy === "medium"
               ? "border-yellow-300"
               : "border-red-300";
-          let displayScore = segment.score.toString();
-          if (displayScore.includes("e") || displayScore.includes("E")) {
-            const expMatch = displayScore.match(/([\d.]+)[eE][+-]?\d+/);
-            if (expMatch) {
-              const mantissa = parseFloat(expMatch[1]);
-              const roundedMantissa = Math.round(mantissa * 1000) / 1000;
-              displayScore = roundedMantissa.toFixed(3);
-            }
-          }
+          const displayScore = formatSegmentScore(segment.score);
           return (
             <div
               key={idx}
@@ -326,8 +319,7 @@ const SegmentPractice: React.FC<SegmentPracticeProps> = ({
                 <div className={`w-3 h-3 rounded-full bg-${color}-500`}></div>
                 <div>
                   <div className='font-medium text-slate-700 text-sm'>
-                    Segment {idx + 1} ({Math.round(segment.start * 100)}% -{" "}
-                    {Math.round(segment.end * 100)}%)
+                    Segment {idx + 1} ({formatSegmentRange(segment)})
                   </div>
                   <div className='text-xs text-slate-500'>
                     Score: {displayScore}% | {segment.accuracy.toUpperCase()}{" "}
@@ -367,7 +359,7 @@ const SegmentPractice: React.FC<SegmentPracticeProps> = ({
             <span className='font-medium text-blue-800 flex items-center gap-2'>
               <Target size={16} />
               Practicing Segment {currentSegmentIndex + 1} (
-              {segments[currentSegmentIndex].score.toFixed(1)}% accuracy)
+              {formatSegmentScore(segments[currentSegmentIndex].score)}% accuracy)
             </span>
             <button
               onClick={stopSegmentPractice}

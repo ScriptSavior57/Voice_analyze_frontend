@@ -22,6 +22,7 @@ import { useSelector } from "react-redux";
 import { RootState } from "../store";
 
 import { APP_COLORS } from "../constants";
+import { formatSegmentScore, formatSegmentRange } from "../utils/scoreFormat";
 import { AnalysisResult, PitchData, PitchDataResponse } from "../types";
 import { PitchPoint, RealTimePitchExtractor } from "../services/pitchExtractor";
 import {
@@ -188,6 +189,24 @@ const TrainingStudio: React.FC = () => {
     message: '',
     variant: 'info',
   });
+
+  // Responsive pitch graph height (mobile/tablet/desktop)
+  const [pitchGraphHeight, setPitchGraphHeight] = useState(400);
+  useEffect(() => {
+    const update = () =>
+      setPitchGraphHeight(
+        typeof window !== "undefined"
+          ? window.innerWidth < 640
+            ? 260
+            : window.innerWidth < 1024
+            ? 320
+            : 400
+          : 400
+      );
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -2198,11 +2217,11 @@ const TrainingStudio: React.FC = () => {
   };
 
   return (
-      <div className='max-w-7xl mx-auto p-6 pb-20'>
+      <div className='max-w-7xl mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 pb-20 sm:pb-24'>
       {/* Header Section */}
-      <div className='flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100'>
+      <div className='flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-100'>
         <div>
-          <h1 className='text-3xl font-bold text-slate-800'>
+          <h1 className='text-2xl sm:text-3xl font-bold text-slate-800'>
             {userRole === 'public' ? 'Training Studio (Demo)' : 'Training Studio'}
           </h1>
           <p className='text-slate-500'>
@@ -2410,7 +2429,7 @@ const TrainingStudio: React.FC = () => {
           </div>
         )}
 
-        <div className='flex items-center gap-4'>
+        <div className='flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 w-full sm:w-auto'>
           {/* Reference Library Selector */}
           <ReferenceLibrary
             references={referenceLibrary}
@@ -2502,11 +2521,11 @@ const TrainingStudio: React.FC = () => {
 
           <div className='flex flex-col gap-2'>
             {(userRole === 'public' || !user || (userRole !== 'admin' && userRole !== 'qari')) ? (
-              <div className='px-4 py-2.5 bg-slate-300 text-slate-600 rounded-lg text-sm font-medium text-center'>
+              <div className='inline-flex items-center justify-center h-10 px-4 bg-slate-300 text-slate-600 rounded-lg text-sm font-medium'>
                 Login as Admin/Qari to upload
               </div>
             ) : (
-              <label className='flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg cursor-pointer transition-colors text-sm font-medium shadow-sm shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed' style={{ pointerEvents: isLoadingReferences ? 'none' : 'auto' }}>
+              <label className='inline-flex items-center justify-center gap-2 h-10 px-3 sm:px-4 whitespace-nowrap bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg cursor-pointer transition-colors text-xs sm:text-sm font-medium shadow-sm shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed' style={{ pointerEvents: isLoadingReferences ? 'none' : 'auto' }}>
                 <Upload size={16} />
                 {isLoadingReferences ? 'Uploading...' : 'Upload Ref'}
                 <input
@@ -2539,19 +2558,19 @@ const TrainingStudio: React.FC = () => {
         </div>
       </div>
 
-      <div className='grid grid-cols-1 lg:grid-cols-12 gap-8'>
+      <div className='grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8 mt-4'>
         {/* Main Workspace */}
-        <div className='lg:col-span-8 space-y-6'>
+        <div className='lg:col-span-8 space-y-4 sm:space-y-6'>
           {/* Reference Audio Section */}
-          <div className='bg-white p-6 rounded-2xl shadow-sm border border-slate-100'>
-            <div className='flex items-center justify-between mb-4'>
-              <h2 className='text-lg font-semibold text-emerald-700 flex items-center gap-2'>
+          <div className='bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-100'>
+            <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4'>
+              <h2 className='text-base sm:text-lg font-semibold text-emerald-700 flex items-center gap-2'>
                 <span className='flex items-center justify-center w-8 h-8 bg-emerald-100 rounded-lg'>
                   <Music size={16} className='text-emerald-600' />
                 </span>
                 Reference Audio
               </h2>
-              <div className='flex items-center gap-2'>
+              <div className='flex items-center gap-2 flex-shrink-0'>
                 {selectedRef?.maqam && (
                   <span className='text-xs font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full'>
                     {selectedRef.maqam}
@@ -2686,8 +2705,8 @@ const TrainingStudio: React.FC = () => {
                   {/* Only show this section when NOT extracting */}
                   {!isExtractingRefPitch && (
                   <div className='mb-4'>
-                    <div className='flex items-center justify-between mb-3'>
-                      <h3 className='text-lg font-semibold text-slate-700 flex items-center gap-2'>
+                    <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3'>
+                      <h3 className='text-base sm:text-lg font-semibold text-slate-700 flex items-center gap-2'>
                         <Music size={18} className='text-emerald-600' />
                         Reference Pitch
                         {isPracticeMode && (
@@ -2701,7 +2720,7 @@ const TrainingStudio: React.FC = () => {
                           </span>
                         )}
                       </h3>
-                      <div className='flex items-center gap-2'>
+                      <div className='flex flex-wrap items-center gap-2'>
                         {referencePitchData.length > 0 && (
                           <>
                             {!isPracticeMode ? (
@@ -2822,7 +2841,7 @@ const TrainingStudio: React.FC = () => {
                           }
                         }
                       }}
-                      height={400}
+                      height={pitchGraphHeight}
                       markers={analysisResult?.pitchData?.markers || []}
                       onMarkerClick={(time) => {
                         // Seek reference audio to marker time
@@ -2987,13 +3006,13 @@ const TrainingStudio: React.FC = () => {
                   )}
 
                   {/* Audio controls for reference */}
-                  <div className='flex justify-center items-center gap-4 mt-8 flex-wrap'>
-                    {/* Reference Audio Playback Speed Control - positioned with button group */}
-                    <div className='flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-lg border border-slate-200'>
-                      <label className='text-sm font-medium text-slate-600 whitespace-nowrap'>
+                  <div className='flex flex-col sm:flex-row justify-center items-center gap-4 mt-8 flex-wrap overflow-y-auto min-w-0'>
+                    {/* Reference Audio Playback Speed Control - stack vertically on narrow screens to avoid truncation */}
+                    <div className='flex flex-col sm:flex-row sm:items-center gap-2 bg-slate-50 px-3 sm:px-4 py-2 rounded-lg border border-slate-200 flex-shrink-0 w-full sm:w-auto'>
+                      <label className='text-xs sm:text-sm font-medium text-slate-600 whitespace-nowrap flex-shrink-0'>
                         Reference Speed:
                       </label>
-                      <div className='flex items-center gap-1'>
+                      <div className='flex flex-wrap items-center gap-1'>
                         {[0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map((speed) => (
                           <button
                             key={speed}
@@ -3022,30 +3041,30 @@ const TrainingStudio: React.FC = () => {
                     </div>
 
                     {/* Control Buttons */}
-                    <div className='flex gap-3'>
+                    <div className='flex flex-wrap justify-center gap-2 sm:gap-3'>
                       <button
                         onClick={handleRefPlay}
-                        className='flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-all hover:scale-105'
+                        className='flex items-center justify-center gap-1.5 sm:gap-2 px-4 py-2 min-w-[88px] sm:min-w-[100px] bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium text-sm transition-all hover:scale-105 flex-shrink-0 whitespace-nowrap'
                       >
                         {isPlaying ? (
-                          <Pause size={16} />
+                          <Pause size={16} className='flex-shrink-0' />
                         ) : (
-                          <Play size={16} fill='currentColor' />
+                          <Play size={16} fill='currentColor' className='flex-shrink-0' />
                         )}
                         {isPlaying ? "Pause" : "Play"}
                       </button>
                       <button
                         onClick={handleRefStop}
-                        className='flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-all hover:scale-105'
+                        className='flex items-center justify-center gap-1.5 sm:gap-2 px-4 py-2 min-w-[88px] sm:min-w-[100px] bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium text-sm transition-all hover:scale-105 flex-shrink-0 whitespace-nowrap'
                       >
-                        <Square size={16} />
+                        <Square size={16} className='flex-shrink-0' />
                         Stop
                       </button>
                       <button
                         onClick={handleRefRestart}
-                        className='flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-all hover:scale-105'
+                        className='flex items-center justify-center gap-1.5 sm:gap-2 px-4 py-2 min-w-[88px] sm:min-w-[100px] bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium text-sm transition-all hover:scale-105 flex-shrink-0 whitespace-nowrap'
                       >
-                        <RefreshCw size={16} />
+                        <RefreshCw size={16} className='flex-shrink-0' />
                         Restart
                       </button>
                     </div>
@@ -3294,7 +3313,7 @@ const TrainingStudio: React.FC = () => {
                       ? Math.max(...recordingPitchData.map((p) => p.time))
                       : 0)
                   }
-                  height={400}
+                  height={pitchGraphHeight}
                   markers={analysisResult?.pitchData?.markers || []}
                   onMarkerClick={(time) => {
                     // Seek student audio to marker time
@@ -3761,10 +3780,10 @@ const TrainingStudio: React.FC = () => {
         </div>
 
         {/* Sidebar / Analysis Panel */}
-        <div className='lg:col-span-4 space-y-6'>
+        <div className='lg:col-span-4 space-y-4 sm:space-y-6'>
           {/* Progress Tracking Card */}
           {progressData && progressData.totalAttempts > 0 && (
-            <div className='bg-white p-6 rounded-2xl shadow-sm border border-slate-100'>
+            <div className='bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-100'>
               <h3 className='font-semibold text-slate-700 mb-4 flex items-center gap-2'>
                 <TrendingUp size={18} className='text-blue-600' />
                 Progress Tracking
@@ -3813,7 +3832,7 @@ const TrainingStudio: React.FC = () => {
 
           {/* Analysis Result Card */}
           {analysisResult ? (
-            <div className='bg-white p-6 rounded-2xl shadow-lg border border-emerald-100 h-full flex flex-col animate-fade-in relative overflow-hidden'>
+            <div className='bg-white p-4 sm:p-6 rounded-2xl shadow-lg border border-emerald-100 h-full flex flex-col animate-fade-in relative overflow-hidden'>
               <div className='absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-blue-500'></div>
               <h3 className='text-xl font-bold text-slate-800 mb-6 flex items-center gap-2'>
                 <CheckCircle className='text-emerald-500' />
@@ -4016,38 +4035,7 @@ const TrainingStudio: React.FC = () => {
                                   ) {
                                     segmentScore = correspondingSegment.score;
                                   }
-
-                                  // Format score for display (same logic as segment breakdown)
-                                  let scoreDisplay: string;
-                                  if (segmentScore > 0 && segmentScore < 0.01) {
-                                    const scoreStr = segmentScore.toString();
-                                    if (
-                                      scoreStr.includes("e") ||
-                                      scoreStr.includes("E")
-                                    ) {
-                                      const expMatch =
-                                        scoreStr.match(/([\d.]+)[eE][+-]?\d+/);
-                                      if (expMatch) {
-                                        const mantissa = parseFloat(
-                                          expMatch[1]
-                                        );
-                                        const roundedMantissa =
-                                          Math.round(mantissa * 1000) / 1000;
-                                        scoreDisplay =
-                                          roundedMantissa.toFixed(3);
-                                      } else {
-                                        scoreDisplay = segmentScore.toFixed(3);
-                                      }
-                                    } else {
-                                      scoreDisplay = segmentScore.toFixed(3);
-                                    }
-                                  } else {
-                                    const normalizedScore = Math.max(
-                                      0,
-                                      Math.min(100, segmentScore)
-                                    );
-                                    scoreDisplay = normalizedScore.toFixed(1);
-                                  }
+                                  const scoreDisplay = formatSegmentScore(segmentScore);
 
                                   return (
                                     <div
@@ -4142,47 +4130,12 @@ const TrainingStudio: React.FC = () => {
                           // Don't convert very small positive numbers to 0 - they're valid scores
                           // Only set to 0 if it's actually 0, null, undefined, NaN, or negative
 
-                          // Clamp to valid range
+                          // Clamp to valid range (segment scores capped at 100%)
                           const normalizedScore = Math.max(
                             0,
                             Math.min(100, score)
                           );
-
-                          // Format score for display
-                          // For scientific notation values, extract mantissa and show as regular decimal (3 decimal places)
-                          let scoreDisplay: string;
-                          if (score > 0 && score < 0.01) {
-                            // Check if it's in scientific notation format
-                            const scoreStr = score.toString();
-                            if (
-                              scoreStr.includes("e") ||
-                              scoreStr.includes("E")
-                            ) {
-                              // Extract mantissa from scientific notation
-                              // Example: 6.179e-19 -> extract 6.179 -> round to 3 decimals -> 6.179
-                              const expMatch =
-                                scoreStr.match(/([\d.]+)[eE][+-]?\d+/);
-                              if (expMatch) {
-                                const mantissa = parseFloat(expMatch[1]);
-                                // Round mantissa to 3 decimal places
-                                const roundedMantissa =
-                                  Math.round(mantissa * 1000) / 1000;
-                                scoreDisplay = roundedMantissa.toFixed(3);
-                              } else {
-                                // Fallback: convert to regular number with 3 decimal places
-                                scoreDisplay = score.toFixed(3);
-                              }
-                            } else if (score < 0.0001) {
-                              // Very small number - show with 3 decimal places
-                              scoreDisplay = score.toFixed(3);
-                            } else {
-                              // Show with 4 decimal places for small but readable numbers
-                              scoreDisplay = score.toFixed(4);
-                            }
-                          } else {
-                            // Normal numbers - show 2 decimal places
-                            scoreDisplay = normalizedScore.toFixed(2);
-                          }
+                          const scoreDisplay = formatSegmentScore(score);
 
                           // For progress bar, use normalized score but ensure minimum visibility
                           const barWidth =
@@ -4195,9 +4148,8 @@ const TrainingStudio: React.FC = () => {
                               key={idx}
                               className='flex items-center text-sm'
                             >
-                              <span className='w-20 text-slate-500 text-xs font-mono'>
-                                {Math.round(seg.start * 100)}-
-                                {Math.round(seg.end * 100)}%
+                              <span className='w-24 text-slate-500 text-xs font-mono'>
+                                {formatSegmentRange(seg)}
                               </span>
                               <div className='flex-1 h-2.5 bg-slate-100 rounded-full mx-3 overflow-hidden'>
                                 <div

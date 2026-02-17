@@ -243,10 +243,15 @@ const QariDashboard: React.FC = () => {
             <div className="relative">
               <button
                 onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700"
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 shadow-sm border ${
+                  showFilterDropdown
+                    ? "bg-emerald-50 border-emerald-300 text-emerald-800 ring-2 ring-emerald-200"
+                    : "bg-white border-slate-200 text-slate-700 hover:border-emerald-200 hover:bg-emerald-50/50 hover:shadow-md"
+                }`}
               >
+                <Users className="w-4 h-4 text-emerald-600" />
                 <span>{studentFilter === "all" ? "All Users" : studentFilter === "active" ? "Active Users" : "Inactive Users"}</span>
-                <ChevronDown className={`w-4 h-4 transition-transform ${showFilterDropdown ? "rotate-180" : ""}`} />
+                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${showFilterDropdown ? "rotate-180" : ""}`} />
               </button>
               
               {showFilterDropdown && (
@@ -255,16 +260,22 @@ const QariDashboard: React.FC = () => {
                     className="fixed inset-0 z-10"
                     onClick={() => setShowFilterDropdown(false)}
                   />
-                  <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-20">
+                  <div className="absolute right-0 mt-2 w-52 bg-white border border-slate-200 rounded-xl shadow-xl z-20 overflow-hidden">
+                    <div className="p-1.5 bg-slate-50/50 border-b border-slate-100">
+                      <p className="px-3 py-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">Filter by</p>
+                    </div>
                     <button
                       onClick={() => {
                         setStudentFilter("all");
                         setShowFilterDropdown(false);
                       }}
-                      className={`w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors ${
-                        studentFilter === "all" ? "bg-green-50 text-green-700 font-medium" : "text-gray-700"
+                      className={`w-full flex items-center gap-2 pl-5 pr-4 py-2.5 text-left text-sm transition-colors rounded-lg ${
+                        studentFilter === "all"
+                          ? "bg-emerald-100 text-emerald-800 font-semibold"
+                          : "text-slate-700 hover:bg-emerald-50"
                       }`}
                     >
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${studentFilter === "all" ? "bg-emerald-500" : "bg-slate-300"}`} />
                       All Users
                     </button>
                     <button
@@ -272,10 +283,13 @@ const QariDashboard: React.FC = () => {
                         setStudentFilter("active");
                         setShowFilterDropdown(false);
                       }}
-                      className={`w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors ${
-                        studentFilter === "active" ? "bg-green-50 text-green-700 font-medium" : "text-gray-700"
+                      className={`w-full flex items-center gap-2 pl-5 pr-4 py-2.5 text-left text-sm transition-colors rounded-lg ${
+                        studentFilter === "active"
+                          ? "bg-emerald-100 text-emerald-800 font-semibold"
+                          : "text-slate-700 hover:bg-emerald-50"
                       }`}
                     >
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${studentFilter === "active" ? "bg-emerald-500" : "bg-slate-300"}`} />
                       Active Users
                     </button>
                     <button
@@ -283,10 +297,13 @@ const QariDashboard: React.FC = () => {
                         setStudentFilter("inactive");
                         setShowFilterDropdown(false);
                       }}
-                      className={`w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors rounded-b-lg ${
-                        studentFilter === "inactive" ? "bg-green-50 text-green-700 font-medium" : "text-gray-700"
+                      className={`w-full flex items-center gap-2 pl-5 pr-4 py-2.5 text-left text-sm transition-colors rounded-lg ${
+                        studentFilter === "inactive"
+                          ? "bg-emerald-100 text-emerald-800 font-semibold"
+                          : "text-slate-700 hover:bg-emerald-50"
                       }`}
                     >
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${studentFilter === "inactive" ? "bg-emerald-500" : "bg-slate-300"}`} />
                       Inactive Users
                     </button>
                   </div>

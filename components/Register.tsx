@@ -75,8 +75,8 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin, onSuccess, onClose
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-blue-50 p-4 relative">
-      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-blue-50 p-3 sm:p-4 relative">
+      <div className="bg-white rounded-2xl shadow-xl p-5 sm:p-8 w-full max-w-md max-h-[100dvh] overflow-y-auto">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-800 mb-2">Tarannum AI</h1>
           <p className="text-gray-600">Create your account</p>

@@ -3,6 +3,7 @@ import { Play, Pause, Square, RotateCcw } from "lucide-react";
 import WaveSurfer from "wavesurfer.js";
 import { PitchData, AyahTiming } from "../types";
 import AyahTextDisplay from "./AyahTextDisplay";
+import { formatSegmentScore } from "../utils/scoreFormat";
 
 interface Segment {
   start: number;
@@ -370,7 +371,7 @@ const PitchComparison: React.FC<PitchComparisonProps> = ({
           ctx.font = "bold 10px sans-serif";
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
-          ctx.fillText(`${seg.score.toFixed(1)}%`, badgeX, badgeY);
+          ctx.fillText(`${formatSegmentScore(seg.score)}%`, badgeX, badgeY);
         }
       });
     }
@@ -1193,33 +1194,7 @@ const PitchComparison: React.FC<PitchComparisonProps> = ({
                     : "bg-red-400 text-white"
                 }`}
               >
-                {(() => {
-                  const score = hoverInfo.segment.score;
-                  // Handle very small scores and ensure valid number
-                  if (
-                    score === null ||
-                    score === undefined ||
-                    isNaN(score) ||
-                    !isFinite(score)
-                  ) {
-                    return "0.0%";
-                  }
-                  // Format score - preserve small values
-                  if (score > 0 && score < 0.01) {
-                    const scoreStr = score.toString();
-                    if (scoreStr.includes("e") || scoreStr.includes("E")) {
-                      const expMatch = scoreStr.match(/([\d.]+)[eE][+-]?\d+/);
-                      if (expMatch) {
-                        const mantissa = parseFloat(expMatch[1]);
-                        const roundedMantissa =
-                          Math.round(mantissa * 1000) / 1000;
-                        return `${roundedMantissa.toFixed(3)}%`;
-                      }
-                    }
-                    return score.toFixed(3) + "%";
-                  }
-                  return Math.max(0, Math.min(100, score)).toFixed(1) + "%";
-                })()}
+                {formatSegmentScore(hoverInfo.segment.score)}%
               </span>
               <span className='text-slate-300 text-xs'>
                 {hoverInfo.segment.accuracy === "high"

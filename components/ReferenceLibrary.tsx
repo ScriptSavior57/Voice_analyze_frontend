@@ -20,7 +20,7 @@ const ReferenceLibrary: React.FC<ReferenceLibraryProps> = ({
   return (
     <div className="relative">
       <select
-        className="appearance-none bg-slate-50 border border-slate-300 rounded-lg pl-4 pr-10 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none cursor-pointer font-medium text-slate-700 min-w-[240px]"
+        className="appearance-none bg-slate-50 border border-slate-300 rounded-lg pl-4 pr-10 h-10 text-sm focus:ring-2 focus:ring-emerald-500 outline-none cursor-pointer font-medium text-slate-700 w-full sm:min-w-[240px] min-w-0"
         value={selectedId || ""}
         onChange={(e) => onSelect(e.target.value)}
         disabled={isLoading}

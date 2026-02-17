@@ -165,6 +165,7 @@ const ScoreExplanation: React.FC<ScoreExplanationProps> = ({
                 </ul>
                 <p className="mt-2 text-sm text-slate-600 italic">
                   A higher score indicates a closer match across all these dimensions. 
+                  All scores—overall and per segment—are normalized to 0–100%. 
                   The score ranges from 0% (completely different) to 100% (perfect match).
                 </p>
               </div>
@@ -328,7 +329,8 @@ const ScoreExplanation: React.FC<ScoreExplanationProps> = ({
                 <div className="mt-2 pt-2 border-t border-slate-300">
                   <p className="text-xs text-slate-500">
                     <strong>Score Weighting:</strong> Pitch (50%) + Timing (16%) + 
-                    Pronunciation (34%) = 100% overall score
+                    Pronunciation (34%) = 100% overall score. Segment scores are 
+                    each capped at 0–100% for consistency.
                   </p>
                 </div>
               </div>

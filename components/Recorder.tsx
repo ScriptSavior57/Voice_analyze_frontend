@@ -203,8 +203,8 @@ const Recorder: React.FC<RecorderProps> = ({
   }, []);
 
   return (
-    <div className='flex flex-col items-center justify-center p-6 bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl transition-all'>
-      <div className='text-3xl font-mono text-slate-700 mb-4 font-bold'>
+    <div className='flex flex-col items-center justify-center p-4 sm:p-6 bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl transition-all'>
+      <div className='text-2xl sm:text-3xl font-mono text-slate-700 mb-4 font-bold'>
         {formatTime(timer)}
       </div>
 
@@ -216,22 +216,22 @@ const Recorder: React.FC<RecorderProps> = ({
               onRecordingStart();
             }
           }}
-          className='flex items-center gap-2 px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full text-lg font-semibold shadow-lg transition-transform transform hover:scale-105'
+          className='flex items-center justify-center gap-2 min-h-[48px] min-w-[160px] px-6 sm:px-8 py-3 sm:py-4 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-full text-base sm:text-lg font-semibold shadow-lg transition-transform hover:scale-105 touch-manipulation'
         >
-          <Mic className='w-6 h-6' />
+          <Mic className='w-5 h-5 sm:w-6 sm:h-6' />
           Start Recording
         </button>
       ) : (
         <button
           onClick={stopRecording}
-          className='flex items-center gap-2 px-8 py-4 bg-red-500 hover:bg-red-600 text-white rounded-full text-lg font-semibold shadow-lg animate-pulse'
+          className='flex items-center justify-center gap-2 min-h-[48px] min-w-[140px] px-6 sm:px-8 py-3 sm:py-4 bg-red-500 hover:bg-red-600 active:scale-95 text-white rounded-full text-base sm:text-lg font-semibold shadow-lg animate-pulse touch-manipulation'
         >
-          <Square className='w-6 h-6 fill-current' />
+          <Square className='w-5 h-5 sm:w-6 sm:h-6 fill-current' />
           Stop Recording
         </button>
       )}
 
-      <p className='mt-4 text-sm text-slate-500'>
+      <p className='mt-4 text-xs sm:text-sm text-slate-500 text-center px-2'>
         {isRecording
           ? "Recording in progress..."
           : "Click start to mimic the reference recitation"}

@@ -51,10 +51,10 @@ const AlertModal: React.FC<AlertModalProps> = ({
   const Icon = styles.icon;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-lg max-w-md w-full">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3 sm:p-4">
+      <div className="bg-white rounded-xl shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
         {/* Modal Header */}
-        <div className="flex items-center justify-between p-6 border-b border-slate-200">
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-slate-200">
           <div className="flex items-center gap-3">
             <div className={`w-10 h-10 ${styles.iconBg} rounded-full flex items-center justify-center`}>
               <Icon className={`w-5 h-5 ${styles.iconColor}`} />
@@ -70,12 +70,12 @@ const AlertModal: React.FC<AlertModalProps> = ({
         </div>
 
         {/* Modal Content */}
-        <div className="p-6">
-          <p className="text-slate-700">{message}</p>
+        <div className="p-4 sm:p-6">
+          <p className="text-slate-700 text-sm sm:text-base">{message}</p>
         </div>
 
         {/* Modal Footer */}
-        <div className="flex items-center justify-end p-6 border-t border-slate-200">
+        <div className="flex items-center justify-end p-4 sm:p-6 border-t border-slate-200">
           <button
             onClick={onClose}
             className={`px-4 py-2 ${styles.buttonBg} text-white rounded-lg transition-colors font-medium`}

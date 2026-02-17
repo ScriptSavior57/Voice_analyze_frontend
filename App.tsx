@@ -359,20 +359,20 @@ const App: React.FC = () => {
       <main className={`flex-1 ${!isAuthPage ? 'md:ml-64' : ''} relative`}>
         {/* Header - Hide on auth pages */}
         {!isAuthPage && (
-        <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm px-4 md:px-6 py-3 md:py-4 flex items-center justify-between">
+        <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm px-3 sm:px-4 md:px-6 py-3 md:py-4 flex items-center justify-between gap-2 min-h-[56px]">
             <button
               onClick={() => setMobileMenuOpen(true)}
               className="md:hidden p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
             >
               <Menu size={24} />
             </button>
-            <div className="flex items-center gap-2 flex-1 md:flex-none">
-                 <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-lg flex items-center justify-center shadow-md">
+            <div className="flex items-center gap-2 flex-1 md:flex-none min-w-0">
+                 <div className="w-8 h-8 flex-shrink-0 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-lg flex items-center justify-center shadow-md">
                     <Mic2 className="text-white" size={16} />
                 </div>
-                <span className="font-bold text-slate-800 text-lg">Tarannum AI</span>
+                <span className="font-bold text-slate-800 text-base sm:text-lg truncate">Tarannum AI</span>
             </div>
-            <div className="flex items-center gap-2 md:gap-3">
+            <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 flex-shrink-0">
               {isAuthenticated && (
                 <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 text-slate-700 text-xs font-medium">
                   <User size={14} />
@@ -396,7 +396,7 @@ const App: React.FC = () => {
         </header>
         )}
 
-        <div className="min-h-[calc(100vh-64px)]">
+        <div className="min-h-[calc(100vh-64px)] pb-[env(safe-area-inset-bottom)]">
           <Routes>
             {/* Auth Routes */}
             <Route 
