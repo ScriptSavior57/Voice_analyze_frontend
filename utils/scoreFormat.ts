@@ -13,25 +13,22 @@ export function clampSegmentScore(score: number): number {
 }
 
 /**
- * Format a segment score for display. Always returns a value in 0-100%.
- * Handles very small numbers and scientific notation.
- * @returns String ready to display (e.g. "85.0" or "0.001") — append "%" in UI.
+ * Format a segment or overall score for display (Milestone 5).
+ * Whole numbers for scores >= 1; one decimal for 0 < score < 1 so small scores don't show as 0%.
+ * @returns String e.g. "85" or "0.2" — append "%" in UI for "85%" or "0.2%".
  */
 export function formatSegmentScore(score: number): string {
   const normalized = clampSegmentScore(score);
-  if (normalized > 0 && normalized < 0.01) {
-    const scoreStr = normalized.toString();
-    if (scoreStr.includes("e") || scoreStr.includes("E")) {
-      const expMatch = scoreStr.match(/([\d.]+)[eE][+-]?\d+/);
-      if (expMatch) {
-        const mantissa = parseFloat(expMatch[1]);
-        const roundedMantissa = Math.round(mantissa * 1000) / 1000;
-        return roundedMantissa.toFixed(3);
-      }
-    }
-    return normalized < 0.0001 ? normalized.toFixed(3) : normalized.toFixed(4);
-  }
-  return normalized.toFixed(1);
+  if (normalized === 0) return "0";
+  if (normalized > 0 && normalized < 1) return normalized.toFixed(1);
+  return String(Math.round(normalized));
+}
+
+/**
+ * Format score with percent sign for consistent display (e.g. "85%").
+ */
+export function formatScoreWithPercent(score: number): string {
+  return `${formatSegmentScore(score)}%`;
 }
 
 /**

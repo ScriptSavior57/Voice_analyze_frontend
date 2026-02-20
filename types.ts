@@ -110,12 +110,20 @@ export interface PronunciationAlert {
 
 export interface AnalysisResult {
   score: number;
+  /** Normalized overall score 0-100 (Milestone 5) */
+  normalizedScore?: number;
   feedback: string | TrainingFeedback; // Support both legacy string and new structured feedback
   segments: {
+    segmentId?: string;
     start: number;
     end: number;
     score?: number;
+    /** Normalized segment score 0-100 */
+    normalized?: number;
+    raw?: number;
+    max?: number;
     accuracy: 'high' | 'medium' | 'low';
+    text?: string;
   }[];
   pitchData?: PitchDataResponse; // Optional pitch data from backend
   ayatTiming?: AyahTiming[]; // Optional ayah text with timing

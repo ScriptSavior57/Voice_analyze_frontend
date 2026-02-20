@@ -146,9 +146,9 @@ export const analyzeRecitation = async (
 
     const data = await response.json();
 
-    // Map backend response to AnalysisResult interface
-    // Handling cases where backend might only return { score: 85 } without segments
+    // Map backend response to AnalysisResult interface (Milestone 5: normalized 0-100)
     const score = typeof data.score === "number" ? data.score : 0;
+    const normalizedScore = typeof data.normalizedScore === "number" ? data.normalizedScore : score;
     
     // Step 3: Handle training feedback (can be object or legacy string)
     let feedback: string | TrainingFeedback;
@@ -201,15 +201,32 @@ export const analyzeRecitation = async (
           score = Math.max(0, Math.min(100, Number(score)));
         }
 
-        const result = {
+        const normalized = seg.normalized !== undefined && seg.normalized !== null
+          ? Math.max(0, Math.min(100, Number(seg.normalized)))
+          : score;
+        const result: {
+          segmentId?: string;
+          start: number;
+          end: number;
+          score: number;
+          normalized?: number;
+          raw?: number;
+          max?: number;
+          accuracy: 'high' | 'medium' | 'low';
+          text?: string;
+        } = {
           start: typeof seg.start === "number" ? seg.start : 0,
           end: typeof seg.end === "number" ? seg.end : 0,
-          score: score, // Keep the actual score value, even if very small
+          score: normalized,
           accuracy:
             seg.accuracy ||
-            (score >= 80 ? "high" : score >= 50 ? "medium" : "low"),
+            (normalized >= 80 ? "high" : normalized >= 50 ? "medium" : "low"),
         };
-
+        if (seg.segmentId != null) result.segmentId = String(seg.segmentId);
+        if (seg.normalized != null) result.normalized = normalized;
+        if (seg.raw != null) result.raw = Number(seg.raw);
+        if (seg.max != null) result.max = Number(seg.max);
+        if (seg.text != null) result.text = seg.text;
         return result;
       });
       console.log("Final parsed segments:", segments);
@@ -250,6 +267,7 @@ export const analyzeRecitation = async (
 
     return {
       score,
+      normalizedScore,
       feedback,
       segments,
       pitchData,
@@ -260,6 +278,7 @@ export const analyzeRecitation = async (
     console.error("Scoring Service Error:", error);
     return {
       score: 0,
+      normalizedScore: 0,
       feedback:
         error instanceof Error
           ? `Error: ${error.message}`

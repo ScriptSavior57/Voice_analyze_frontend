@@ -22,7 +22,7 @@ import { useSelector } from "react-redux";
 import { RootState } from "../store";
 
 import { APP_COLORS } from "../constants";
-import { formatSegmentScore, formatSegmentRange } from "../utils/scoreFormat";
+import { formatSegmentScore, formatSegmentRange, formatScoreWithPercent } from "../utils/scoreFormat";
 import { AnalysisResult, PitchData, PitchDataResponse } from "../types";
 import { PitchPoint, RealTimePitchExtractor } from "../services/pitchExtractor";
 import {
@@ -3877,7 +3877,9 @@ const TrainingStudio: React.FC = () => {
                           : "text-red-500"
                       }`}
                     >
-                      {analysisResult.score}%
+                      {formatScoreWithPercent(
+                        analysisResult.normalizedScore ?? analysisResult.score
+                      )}
                     </span>
                   </div>
                 </div>
@@ -3891,30 +3893,24 @@ const TrainingStudio: React.FC = () => {
                       <Info
                         size={14}
                         className='text-slate-400 hover:text-slate-600 cursor-help transition-colors'
+                        aria-label='Scoring explanation'
                       />
-                      <div className='absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block w-56 bg-slate-800 text-white text-xs rounded-lg p-3 z-20 shadow-xl pointer-events-none'>
+                      <div className='absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block w-64 bg-slate-800 text-white text-xs rounded-lg p-3 z-20 shadow-xl pointer-events-none'>
                         <div className='font-semibold mb-1.5 text-white'>
-                          What does this score measure?
+                          How your score is calculated
                         </div>
-                        <div className='space-y-1.5 text-slate-200'>
-                          <div>
-                            <span className='font-medium'>Pitch (50%):</span>{" "}
-                            How well your melodic contour matches the reference
-                          </div>
-                          <div>
-                            <span className='font-medium'>Timing (16%):</span>{" "}
-                            How well your rhythm and tempo match
-                          </div>
-                          <div>
-                            <span className='font-medium'>
-                              Pronunciation (34%):
-                            </span>{" "}
-                            How clearly and accurately you pronounce each word
-                          </div>
-                        </div>
-                        <div className='mt-2 pt-2 border-t border-slate-700 text-slate-300 italic text-[10px]'>
-                          Higher score = closer match to reference
-                        </div>
+                        <p className='text-slate-200 leading-relaxed'>
+                          Your score is based on:
+                        </p>
+                        <ul className='mt-1.5 space-y-1 text-slate-200 list-disc list-inside'>
+                          <li>Pitch accuracy</li>
+                          <li>Pitch stability</li>
+                          <li>Timing alignment</li>
+                          <li>Continuity</li>
+                        </ul>
+                        <p className='mt-2 pt-2 border-t border-slate-700 text-slate-300 italic text-[10px]'>
+                          Each segment is normalized to a 0–100% scale for clarity.
+                        </p>
                         {/* Arrow pointing down */}
                         <div className='absolute top-full left-1/2 transform -translate-x-1/2 -mt-1'>
                           <div className='w-2 h-2 bg-slate-800 rotate-45'></div>
@@ -4111,9 +4107,11 @@ const TrainingStudio: React.FC = () => {
                       </h4>
                       <div className='space-y-3'>
                         {analysisResult.segments.map((seg, idx) => {
-                          // Use segment score if available, otherwise fallback to overall score
+                          // Prefer normalized (0-100) from backend; fallback to score
                           let score =
-                            seg.score !== undefined && seg.score !== null
+                            seg.normalized !== undefined && seg.normalized !== null
+                              ? seg.normalized
+                              : seg.score !== undefined && seg.score !== null
                               ? seg.score
                               : analysisResult.score || 0;
 
