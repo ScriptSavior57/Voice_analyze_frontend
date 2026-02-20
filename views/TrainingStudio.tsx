@@ -2217,7 +2217,7 @@ const TrainingStudio: React.FC = () => {
   };
 
   return (
-      <div className='max-w-7xl mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 pb-20 sm:pb-24'>
+      <div className='max-w-7xl mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 pb-20 sm:pb-24 overflow-x-hidden min-h-0'>
       {/* Header Section */}
       <div className='flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-100'>
         <div>
@@ -2560,7 +2560,7 @@ const TrainingStudio: React.FC = () => {
 
       <div className='grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8 mt-4'>
         {/* Main Workspace */}
-        <div className='lg:col-span-8 space-y-4 sm:space-y-6'>
+        <div className='lg:col-span-8 space-y-4 sm:space-y-6 min-w-0'>
           {/* Reference Audio Section */}
           <div className='bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-100'>
             <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4'>
@@ -2721,9 +2721,10 @@ const TrainingStudio: React.FC = () => {
                         )}
                       </h3>
                       <div className='flex flex-wrap items-center gap-2'>
-                        {referencePitchData.length > 0 && (
+                        {(referencePitchData.length > 0 ||
+                          (analysisResult?.pitchData?.reference && analysisResult.pitchData.reference.length > 0)) && (
                           <>
-                            {!isPracticeMode ? (
+                            {referencePitchData.length > 0 && !isPracticeMode ? (
                               <button
                                 onClick={() => setShowCountdown(true)}
                                 className='flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors text-emerald-600 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100'
@@ -2732,7 +2733,7 @@ const TrainingStudio: React.FC = () => {
                                 <Play size={14} />
                                 Start Practice
                               </button>
-                            ) : (
+                            ) : referencePitchData.length > 0 && isPracticeMode ? (
                               <>
                                 <button
                                   onClick={handlePracticeStop}
@@ -2751,13 +2752,13 @@ const TrainingStudio: React.FC = () => {
                                   Restart
                                 </button>
                               </>
-                            )}
-                            {/* Full-Screen Toggle Button */}
-                            {referencePitchData.length > 0 && (
+                            ) : null}
+                            {(referencePitchData.length > 0 ||
+                              (analysisResult?.pitchData?.reference && analysisResult.pitchData.reference.length > 0)) && (
                               <button
                                 onClick={() => setIsFullScreenMode(true)}
-                                className='flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors text-purple-600 bg-purple-50 border border-purple-200 hover:bg-purple-100'
-                                title='Enter full-screen training mode'
+                                className='flex items-center gap-1.5 px-3 py-1.5 min-h-[44px] text-xs font-medium rounded-lg transition-colors text-purple-600 bg-purple-50 border border-purple-200 hover:bg-purple-100'
+                                title='Enter full-screen mode'
                               >
                                 <Maximize2 size={14} />
                                 Full Screen
@@ -3044,7 +3045,7 @@ const TrainingStudio: React.FC = () => {
                     <div className='flex flex-wrap justify-center gap-2 sm:gap-3'>
                       <button
                         onClick={handleRefPlay}
-                        className='flex items-center justify-center gap-1.5 sm:gap-2 px-4 py-2 min-w-[88px] sm:min-w-[100px] bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium text-sm transition-all hover:scale-105 flex-shrink-0 whitespace-nowrap'
+                        className='flex items-center justify-center gap-1.5 sm:gap-2 px-4 py-2 min-h-[44px] min-w-[88px] sm:min-w-[100px] bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium text-sm transition-all hover:scale-105 flex-shrink-0 whitespace-nowrap'
                       >
                         {isPlaying ? (
                           <Pause size={16} className='flex-shrink-0' />
@@ -3055,14 +3056,14 @@ const TrainingStudio: React.FC = () => {
                       </button>
                       <button
                         onClick={handleRefStop}
-                        className='flex items-center justify-center gap-1.5 sm:gap-2 px-4 py-2 min-w-[88px] sm:min-w-[100px] bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium text-sm transition-all hover:scale-105 flex-shrink-0 whitespace-nowrap'
+                        className='flex items-center justify-center gap-1.5 sm:gap-2 px-4 py-2 min-h-[44px] min-w-[88px] sm:min-w-[100px] bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium text-sm transition-all hover:scale-105 flex-shrink-0 whitespace-nowrap'
                       >
                         <Square size={16} className='flex-shrink-0' />
                         Stop
                       </button>
                       <button
                         onClick={handleRefRestart}
-                        className='flex items-center justify-center gap-1.5 sm:gap-2 px-4 py-2 min-w-[88px] sm:min-w-[100px] bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium text-sm transition-all hover:scale-105 flex-shrink-0 whitespace-nowrap'
+                        className='flex items-center justify-center gap-1.5 sm:gap-2 px-4 py-2 min-h-[44px] min-w-[88px] sm:min-w-[100px] bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium text-sm transition-all hover:scale-105 flex-shrink-0 whitespace-nowrap'
                       >
                         <RefreshCw size={16} className='flex-shrink-0' />
                         Restart
@@ -3779,8 +3780,7 @@ const TrainingStudio: React.FC = () => {
           </div>
         </div>
 
-        {/* Sidebar / Analysis Panel */}
-        <div className='lg:col-span-4 space-y-4 sm:space-y-6'>
+        <div className='lg:col-span-4 space-y-4 sm:space-y-6 min-w-0'>
           {/* Progress Tracking Card */}
           {progressData && progressData.totalAttempts > 0 && (
             <div className='bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-100'>
@@ -3909,9 +3909,8 @@ const TrainingStudio: React.FC = () => {
                           <li>Continuity</li>
                         </ul>
                         <p className='mt-2 pt-2 border-t border-slate-700 text-slate-300 italic text-[10px]'>
-                          Each segment is normalized to a 0–100% scale for clarity.
+                          Each segment is normalized to a 0–100% scale. All scores are shown as 0–100%.
                         </p>
-                        {/* Arrow pointing down */}
                         <div className='absolute top-full left-1/2 transform -translate-x-1/2 -mt-1'>
                           <div className='w-2 h-2 bg-slate-800 rotate-45'></div>
                         </div>

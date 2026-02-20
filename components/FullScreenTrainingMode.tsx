@@ -149,10 +149,8 @@ const FullScreenTrainingMode: React.FC<FullScreenTrainingModeProps> = ({
   // Calculate graph height for full-screen (maximized to use most of screen)
   const getGraphHeight = () => {
     if (typeof window !== "undefined") {
-      // Calculate available height: viewport - LiveHzDisplay - Quranic text - controls bar - padding
-      // Maximize graph to use ~75% of viewport height
-      const availableHeight = window.innerHeight - 280; // Space for LiveHzDisplay (~80px), Quranic text (~150px), controls (~50px)
-      return Math.max(400, Math.floor(availableHeight * 0.75));
+      const availableHeight = window.innerHeight - 280;
+      return Math.max(400, Math.min(Math.floor(availableHeight * 0.75), Math.floor(window.innerHeight * 0.6)));
     }
     return 600;
   };
@@ -476,11 +474,10 @@ const FullScreenTrainingMode: React.FC<FullScreenTrainingModeProps> = ({
         )}
       </div>
 
-      {/* ENHANCEMENT: Enhanced Controls Bar - Improved UI */}
       <div
-        className={`w-full ${currentTheme.controlsBg} border-t ${currentTheme.border} px-4 py-3 backdrop-blur-sm`}
+        className={`w-full ${currentTheme.controlsBg} border-t ${currentTheme.border} px-4 py-3 backdrop-blur-sm flex-shrink-0 z-10`}
       >
-        <div className='flex items-center justify-center gap-3 flex-wrap'>
+        <div className='flex items-center justify-center gap-3 flex-wrap min-h-[44px]'>
           {/* Practice Controls Group */}
           <div className='flex items-center gap-2'>
             {/* Practice Mode Toggle */}
@@ -670,11 +667,11 @@ const FullScreenTrainingMode: React.FC<FullScreenTrainingModeProps> = ({
           <div className='ml-4 pl-4 border-l border-slate-600/50'>
             <button
               onClick={onClose}
-              className={`flex items-center justify-center w-9 h-9 rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-red-400`}
+              className='flex items-center justify-center w-11 h-11 min-h-[44px] min-w-[44px] rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-red-400'
               title='Exit Full-Screen (ESC)'
               aria-label='Exit full-screen mode'
             >
-              <X size={14} />
+              <X size={18} />
             </button>
           </div>
         </div>

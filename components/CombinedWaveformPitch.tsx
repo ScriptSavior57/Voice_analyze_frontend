@@ -53,9 +53,8 @@ const CombinedWaveformPitch: React.FC<CombinedWaveformPitchProps> = ({
   zoomLevel,
   onZoomChange,
 }) => {
-  // Calculate heights: pitch graph fixed at 255px, waveform takes remaining space
-  const pitchHeight = 255;
-  const waveformHeight = Math.max(height - pitchHeight, 100); // Ensure minimum waveform height
+  const pitchHeight = Math.max(280, Math.min(400, Math.floor(height * 0.55)));
+  const waveformHeight = Math.max(100, height - pitchHeight);
 
   // Determine if student waveform should be shown
   // Show during practice (isRecording) OR when there's a completed recording
