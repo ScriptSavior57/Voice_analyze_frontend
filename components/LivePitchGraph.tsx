@@ -1768,6 +1768,10 @@ const LivePitchGraph: React.FC<LivePitchGraphProps> = ({
           </div>
         </div>
       )}
+      {/* Time-axis note: tracking line = reference playback; student pitch can appear offset if tempo differs */}
+      <p className='mt-1.5 px-1 text-[10px] text-slate-500' title='The blue line shows reference playback position. Student (red) pitch uses the same time axis; if you recited at a different tempo, the red line may appear ahead or behind the blue line.'>
+        Time axis: reference playback. Student pitch may appear offset if tempo differs.
+      </p>
       <style>{`
         .slider::-webkit-slider-thumb {
           appearance: none;
