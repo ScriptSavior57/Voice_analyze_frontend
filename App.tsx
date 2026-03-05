@@ -13,6 +13,7 @@ import QariSelector from './components/QariSelector';
 import QariContentEditor from './components/QariContentEditor';
 import { Mic2, LayoutDashboard, Users, BookOpen, Settings, LogOut, BarChart3, User, Monitor, Menu, X } from 'lucide-react';
 
+
 const App: React.FC = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
